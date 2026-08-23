@@ -24,14 +24,18 @@ class ProjectGitlabCase(ProjectGitCase):
 
     RES_DIR = os.path.join(os.path.dirname(__file__), "res")
 
+    def _parse(self, payload, source, headers=None):
+        """Normalize the payload into an event like the controller does."""
+        event = deepcopy(payload)
+        event["source"] = source
+        return ProjectGitlabWebhook()._parse_git_request_data(
+            event=event, headers=headers
+        )
+
     def _dispatch(self, payload, source, headers=None):
         """Normalize the payload like the controller does, then run the
         matching ``_process_*`` handler synchronously."""
-        event = deepcopy(payload)
-        event["source"] = source
-        event = ProjectGitlabWebhook()._parse_git_request_data(
-            event=event, headers=headers
-        )
+        event = self._parse(payload, source, headers=headers)
         # Event types the source binds no handler for (e.g. tag_push)
         # are skipped, like the controller does
         method_name = f"_process_{event['project_git_event_type']}_{source}"

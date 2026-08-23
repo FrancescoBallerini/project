@@ -164,6 +164,27 @@ class TestGithubPullRequest(ProjectGithubCase):
         message_body = pull.create_issue_comment.call_args[0][0]
         self.assertIn("cannot be found", str(message_body))
 
+    def test_negative_match_messages_derive_inputs_from_event(self):
+        # Called with the event only, the warnings derive their inputs
+        # (matching tasks, title references, repository projects) from it
+        missing_id = (
+            self.env["project.task"].search([], order="id desc", limit=1).id + 1000
+        )
+        patcher, pull = self._mock_github_client()
+        with patcher:
+            event = self._parse(
+                self._pr_payload(title=f"update readme taskid#{missing_id}"), "github"
+            )
+            self.env["project.git.pull.request"]._post_negative_match_messages(event)
+            message_body = pull.create_issue_comment.call_args[0][0]
+            self.assertIn("cannot be found", str(message_body))
+            pull.create_issue_comment.reset_mock()
+            event = self._parse(self._pr_payload(title="Generic title"), "github")
+            self.env["project.git.pull.request"]._post_negative_match_messages(event)
+            pull.create_issue_comment.assert_called_once()
+            message_body = pull.create_issue_comment.call_args[0][0]
+            self.assertIn("WARNING", str(message_body))
+
     def test_pr_does_not_reuse_pr_of_another_platform(self):
         # (id_project, id_request) pairs are only unique per platform: a
         # PR of another platform sharing the identifiers must not be

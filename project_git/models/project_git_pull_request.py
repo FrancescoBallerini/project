@@ -164,7 +164,11 @@ class ProjectGitPullRequest(models.Model):
 
     @api.model
     def _post_negative_match_messages(
-        self, event, matching_tasks, title_task_references, repository_projects
+        self,
+        event,
+        matching_tasks=None,
+        title_task_references=None,
+        repository_projects=None,
     ):
         """Warn on the PR/MR about broken or missing task references.
 
@@ -176,12 +180,33 @@ class ProjectGitPullRequest(models.Model):
         method: in these cases the PR/MR is usually not tracked in Odoo,
         so the message posting relies on the event for identification.
 
+        Every input but the event is optional: the event processor
+        passes the values it already computed, while a bare call derives
+        them from the event (None default: an empty value is legitimate).
+
+        :param dict event: The webhook event
+        :param matching_tasks: project.task recordset matched by the
+            PR/MR (see project.git.event._find_pr_matching_tasks)
         :param list(int) title_task_references: task ids referenced in
             the PR/MR title (see
             project.git.utils._extract_task_id_references)
+        :param repository_projects: project.project recordset related
+            to the event repository
         """
         if not self._is_pr_opening_or_title_change(event):
             return
+        git_event = self.env["project.git.event"]
+        if repository_projects is None:
+            repository_projects = git_event._get_related_projects_by_url(event=event)
+        if matching_tasks is None:
+            matching_tasks, _commit_matches = git_event._find_pr_matching_tasks(
+                event, repository_projects=repository_projects
+            )
+        if title_task_references is None:
+            pr_title = git_event._extract_pr_title_from_event(event)
+            title_task_references = self.env[
+                "project.git.utils"
+            ]._extract_task_id_references(pr_title)
         missing_task_ids = [
             task_id
             for task_id in title_task_references

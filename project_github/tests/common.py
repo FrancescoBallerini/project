@@ -25,9 +25,8 @@ class ProjectGithubCase(ProjectGitCase):
 
     RES_DIR = os.path.join(os.path.dirname(__file__), "res")
 
-    def _dispatch(self, payload, source, headers=None):
-        """Normalize the payload like the controller does, then run the
-        matching ``_process_*`` handler synchronously.
+    def _parse(self, payload, source, headers=None):
+        """Normalize the payload into an event like the controller does.
 
         The event type travels in the X-GitHub-Event header: when not
         given explicitly, the header a real delivery would carry is
@@ -37,9 +36,14 @@ class ProjectGithubCase(ProjectGitCase):
         if headers is None:
             event_name = "pull_request" if payload.get("pull_request") else "push"
             headers = {"X-GitHub-Event": event_name}
-        event = ProjectGithubWebhook()._parse_git_request_data(
+        return ProjectGithubWebhook()._parse_git_request_data(
             event=event, headers=headers
         )
+
+    def _dispatch(self, payload, source, headers=None):
+        """Normalize the payload like the controller does, then run the
+        matching ``_process_*`` handler synchronously."""
+        event = self._parse(payload, source, headers=headers)
         # Event types the source binds no handler for (e.g. tag_push)
         # are skipped, like the controller does
         method_name = f"_process_{event['project_git_event_type']}_{source}"

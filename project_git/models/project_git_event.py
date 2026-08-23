@@ -69,31 +69,10 @@ class ProjectGitEvent(models.Model):
         :return: the project.git.pull.request record (empty recordset if
                  the PR/MR is not tracked in Odoo)
         """
-        pr_title = self._extract_pr_title_from_event(event)
-        source_branch = self._extract_branch_names_from_event(event)["source_branch"]
-        matching_tasks = self.env["project.task"].sudo()
-        commit_matches = []  # (commit, matching tasks) pairs
-
         repository_projects = self._get_related_projects_by_url(event=event)
-        matching_tasks |= self._find_matching_tasks(
-            projects=repository_projects, pattern_text=source_branch
+        matching_tasks, commit_matches = self._find_pr_matching_tasks(
+            event, repository_projects=repository_projects
         )
-        matching_tasks |= self._find_matching_tasks(
-            projects=repository_projects, pattern_text=pr_title
-        )
-        # Fetch all PR/MR commits via API (their messages are a
-        # matching source), falling back to the head commit carried
-        # by the event payload if the call fails
-        commits = self._fetch_pr_commits(event) or self._extract_pr_fallback_commits(
-            event
-        )
-        for commit in commits:
-            commit_matching_tasks = self._find_matching_tasks(
-                projects=repository_projects, pattern_text=commit.get("message", "")
-            )
-            if commit_matching_tasks:
-                commit_matches.append((commit, commit_matching_tasks))
-                matching_tasks |= commit_matching_tasks
 
         git_pull_request = self._get_or_create_pull_request(
             event=event, tasks=matching_tasks
@@ -117,12 +96,57 @@ class ProjectGitEvent(models.Model):
         self.env["project.git.pull.request"]._post_negative_match_messages(
             event,
             matching_tasks=matching_tasks,
-            title_task_references=self.env[
-                "project.git.utils"
-            ]._extract_task_id_references(pr_title),
             repository_projects=repository_projects,
         )
         return git_pull_request
+
+    @api.model
+    def _find_pr_matching_tasks(self, event, repository_projects=None):
+        """High-level method matching the PR/MR of the event and its
+        related entities against the tasks of the repository projects:
+        it extracts the text of each entity and hands it to the
+        low-level _find_matching_tasks, where the matching of a single
+        text (reference extraction and task lookup) lives. The task
+        match is checked against:
+
+        - the PR/MR title;
+        - the PR/MR source branch name;
+        - the PR/MR commit messages (commits fetched via API, falling
+          back to the head commit carried by the event payload if the
+          call fails).
+
+        :param dict event: The webhook event
+        :param repository_projects: project.project recordset related to
+            the event repository; derived from the event when not given
+        :return: (matching_tasks, commit_matches) — the project.task
+            recordset matched by the PR/MR as a whole and the
+            (commit, matching tasks) pairs of the referencing commits
+        """
+        if repository_projects is None:
+            repository_projects = self._get_related_projects_by_url(event=event)
+        source_branch = self._extract_branch_names_from_event(event)["source_branch"]
+        pr_title = self._extract_pr_title_from_event(event)
+        # task match against branch name
+        matching_tasks = self._find_matching_tasks(
+            projects=repository_projects, pattern_text=source_branch
+        )
+        # task match against PR/MR title
+        matching_tasks |= self._find_matching_tasks(
+            projects=repository_projects, pattern_text=pr_title
+        )
+        commit_matches = []
+        commits = self._fetch_pr_commits(event) or self._extract_pr_fallback_commits(
+            event
+        )
+        # task match against PR/MR commits
+        for commit in commits:
+            commit_matching_tasks = self._find_matching_tasks(
+                projects=repository_projects, pattern_text=commit.get("message", "")
+            )
+            if commit_matching_tasks:
+                commit_matches.append((commit, commit_matching_tasks))
+                matching_tasks |= commit_matching_tasks
+        return matching_tasks, commit_matches
 
     @api.model
     def _extract_branch_names_from_event(self, event):

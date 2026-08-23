@@ -697,6 +697,27 @@ class TestGitlabMergeRequest(ProjectGitlabCase):
         message_body = merge_request.discussions.create.call_args[0][0]["body"]
         self.assertIn("cannot be found", str(message_body))
 
+    def test_negative_match_messages_derive_inputs_from_event(self):
+        # Called with the event only, the warnings derive their inputs
+        # (matching tasks, title references, repository projects) from it
+        missing_id = (
+            self.env["project.task"].search([], order="id desc", limit=1).id + 1000
+        )
+        patcher, merge_request = self._mock_gitlab_client()
+        with patcher:
+            event = self._parse(
+                self._mr_payload(title=f"Add new file taskid#{missing_id}"), "gitlab"
+            )
+            self.env["project.git.pull.request"]._post_negative_match_messages(event)
+            message_body = merge_request.discussions.create.call_args[0][0]["body"]
+            self.assertIn("cannot be found", str(message_body))
+            merge_request.discussions.create.reset_mock()
+            event = self._parse(self._mr_payload(title="Generic title"), "gitlab")
+            self.env["project.git.pull.request"]._post_negative_match_messages(event)
+            merge_request.discussions.create.assert_called_once()
+            message_body = merge_request.discussions.create.call_args[0][0]["body"]
+            self.assertIn("WARNING", str(message_body))
+
 
 class TestGitlabPipeline(ProjectGitlabCase):
     def _create_pull_request(self):
