@@ -207,10 +207,13 @@ class ProjectGitPullRequest(models.Model):
             title_task_references = self.env[
                 "project.git.utils"
             ]._extract_task_id_references(pr_title)
+        referenced_tasks = (
+            self.env["project.task"].sudo().browse(title_task_references).exists()
+        )
         missing_task_ids = [
             task_id
             for task_id in title_task_references
-            if not self.env["project.task"].sudo().browse(task_id).exists()
+            if task_id not in referenced_tasks.ids
         ]
         if missing_task_ids:
             message = _(

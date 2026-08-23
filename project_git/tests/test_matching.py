@@ -19,6 +19,19 @@ class TestTaskMatching(ProjectGitCase):
         )
         self.assertFalse(matching_tasks)
 
+    def test_mixed_task_id_references_keep_the_existing_tasks(self):
+        # Several explicit references are resolved together: the
+        # existing tasks are matched, the broken ones dropped
+        missing_id = (
+            self.env["project.task"].search([], order="id desc", limit=1).id + 1000
+        )
+        matching_tasks = self.git_event._find_matching_tasks(
+            projects=self.gitlab_project,
+            pattern_text=f"tid#{self.gl_task_100.id} tid#{missing_id} "
+            f"taskid#{self.gl_task_no_pattern.id}",
+        )
+        self.assertEqual(matching_tasks, self.gl_task_100 | self.gl_task_no_pattern)
+
     def test_matching_runs_as_the_public_user(self):
         # Webhook jobs run with the user who enqueued them — the public
         # user, which has no task access of its own: both matching

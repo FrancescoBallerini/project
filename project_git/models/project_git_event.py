@@ -250,11 +250,13 @@ class ProjectGitEvent(models.Model):
             return matching_tasks
 
         # Explicit id references: global, not restricted to the projects
-        # (a reference to a non-existent task resolves to an empty set)
-        for task_id in self.env["project.git.utils"]._extract_task_id_references(
+        # (references to non-existent tasks are dropped by exists())
+        referenced_task_ids = self.env["project.git.utils"]._extract_task_id_references(
             pattern_text
-        ):
-            matching_tasks |= self.env["project.task"].sudo().browse(task_id).exists()
+        )
+        matching_tasks |= (
+            self.env["project.task"].sudo().browse(referenced_task_ids).exists()
+        )
 
         regex = self.env["project.git.utils"]._get_task_name_match_regex()
         patterns = {
