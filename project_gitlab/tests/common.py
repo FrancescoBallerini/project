@@ -39,8 +39,11 @@ class ProjectGitlabCase(ProjectGitCase):
         # Event types the source binds no handler for (e.g. tag_push)
         # are skipped, like the controller does
         method_name = f"_process_{event['project_git_event_type']}_{source}"
-        if hasattr(self.git_event, method_name):
-            getattr(self.git_event, method_name)(event)
+        # Run as the public user like the real webhook jobs do, so that
+        # every processing path is exercised with the job permissions
+        public_git_event = self.git_event.with_user(self.env.ref("base.public_user"))
+        if hasattr(public_git_event, method_name):
+            getattr(public_git_event, method_name)(event)
         return event
 
     # ---- outbound API mocks ----
