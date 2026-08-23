@@ -1,6 +1,8 @@
 # Copyright 2026 Francesco Ballerini
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl.html).
 
+from odoo.addons.queue_job.tests.common import trap_jobs
+
 from .common import GITLAB_REPO_URL, NULL_SHA, ProjectGitlabCase
 
 
@@ -704,19 +706,83 @@ class TestGitlabMergeRequest(ProjectGitlabCase):
             self.env["project.task"].search([], order="id desc", limit=1).id + 1000
         )
         patcher, merge_request = self._mock_gitlab_client()
-        with patcher:
+        with patcher, trap_jobs() as jobs_trap:
             event = self._parse(
                 self._mr_payload(title=f"Add new file taskid#{missing_id}"), "gitlab"
             )
             self.env["project.git.pull.request"]._post_negative_match_messages(event)
+            jobs_trap.perform_enqueued_jobs()
             message_body = merge_request.discussions.create.call_args[0][0]["body"]
             self.assertIn("cannot be found", str(message_body))
             merge_request.discussions.create.reset_mock()
             event = self._parse(self._mr_payload(title="Generic title"), "gitlab")
             self.env["project.git.pull.request"]._post_negative_match_messages(event)
+            jobs_trap.perform_enqueued_jobs()
             merge_request.discussions.create.assert_called_once()
             message_body = merge_request.discussions.create.call_args[0][0]["body"]
             self.assertIn("WARNING", str(message_body))
+
+    def test_mr_task_link_messages_are_posted_by_dedicated_jobs(self):
+        # One job per task link, enqueued (with an anti-duplicate
+        # identity key and a description locating the MR on the
+        # platform) in the same transaction that flags the task as
+        # notified: the message is posted when the job runs, and a
+        # later event of the MR enqueues nothing more
+        payload = self._mr_payload(title="GL-100 GL-115 add new file")
+        patcher, merge_request = self._mock_gitlab_client()
+        with patcher, trap_jobs() as jobs_trap:
+            self._dispatch(payload, "gitlab", perform_jobs=False)
+            pull_request = self._get_pull_request(payload["object_attributes"]["url"])
+            linked_tasks = self.gl_task_100 | self.gl_task_115
+            jobs_trap.assert_jobs_count(2, only=pull_request._post_message)
+            self.assertEqual(
+                {job.identity_key for job in jobs_trap.enqueued_jobs},
+                {
+                    f"project_git.task_link:{pull_request.id}:{task.id}"
+                    for task in linked_tasks
+                },
+            )
+            self.assertEqual(
+                {job.description for job in jobs_trap.enqueued_jobs},
+                {
+                    f"GitLab: Post task #{task.id} link on Request ID="
+                    f"{payload['object_attributes']['iid']} "
+                    f"(Repo ID={payload['project']['id']})"
+                    for task in linked_tasks
+                },
+            )
+            self.assertEqual(pull_request.notified_task_ids, linked_tasks)
+            merge_request.discussions.create.assert_not_called()
+            jobs_trap.perform_enqueued_jobs()
+            self.assertEqual(merge_request.discussions.create.call_count, 2)
+            payload["object_attributes"]["action"] = "update"
+            self._dispatch(payload, "gitlab", perform_jobs=False)
+            jobs_trap.assert_jobs_count(0)
+
+    def test_mr_negative_match_warning_is_posted_by_dedicated_job(self):
+        # The warning job is identified by the MR platform ids (the MR
+        # is not tracked) and the warning kind
+        payload = self._mr_payload(title="Generic title")
+        patcher, merge_request = self._mock_gitlab_client()
+        with patcher, trap_jobs() as jobs_trap:
+            self._dispatch(payload, "gitlab", perform_jobs=False)
+            self.assertFalse(
+                self._get_pull_request(payload["object_attributes"]["url"])
+            )
+            jobs_trap.assert_jobs_count(1)
+            self.assertEqual(
+                jobs_trap.enqueued_jobs[0].identity_key,
+                f"project_git.no_reference:gitlab:{payload['project']['id']}:"
+                f"{payload['object_attributes']['iid']}",
+            )
+            self.assertEqual(
+                jobs_trap.enqueued_jobs[0].description,
+                f"GitLab: Post no reference warning on Request ID="
+                f"{payload['object_attributes']['iid']} "
+                f"(Repo ID={payload['project']['id']})",
+            )
+            jobs_trap.perform_enqueued_jobs()
+            merge_request.discussions.create.assert_called_once()
 
 
 class TestGitlabPipeline(ProjectGitlabCase):

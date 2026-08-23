@@ -29,7 +29,10 @@ Link your git activity to a task, step by step:
 
 When a task is linked to a PR/MR (typically on opening), a message
 with the task link is posted on the PR/MR, and the task tags track
-the PR/MR and CI pipeline status.
+the PR/MR and CI pipeline status. A PR/MR opened without any task
+reference on a mapped repository, or referencing a `taskid#` that does
+not exist, gets a warning message instead (posted on opening and title
+changes only).
 
 Entities referencing no task are not recorded at all, so unrelated
 repositories can safely share the same webhook endpoint.
@@ -131,3 +134,22 @@ links a task just because it was pushed on a matching branch:
 
 On PR/MR events the source branch inherits every task linked to the
 PR/MR itself.
+
+## Troubleshooting
+
+Every webhook event is processed by a `queue_job` job, and each message
+posted on a PR/MR (task link, warning) by a dedicated job of its own:
+with the developer mode activated, the jobs are listed under **Queue
+Job > Jobs**.
+
+- An event that produced nothing on the tasks: open its job (method
+  `_process_<event>_<platform>`), the traceback of a failed job tells
+  what went wrong; fix the cause (typically a configuration issue) and
+  requeue the job from its form — the processing is idempotent.
+- A PR/MR message that never showed up: when the platform API is
+  unreachable, rate limited or in error, the platform library retries
+  the call on the spot and, if that is not enough, the posting job is
+  retried later (spaced out over time); it ends up *failed* when the
+  API keeps failing or rejects the call (e.g. a token without the
+  write permission). The posting is the only effect of the job, so
+  requeuing it never posts duplicates.

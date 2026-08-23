@@ -119,9 +119,12 @@ class ProjectGitPullRequest(models.Model):
     def _post_task_link_messages(self, event):
         """Post a message on the PR/MR with the link to each related task.
 
-        Already notified tasks are tracked in notified_task_ids so that
-        each task link is posted only once per pull request (avoids message
-        spam, since PR/MR events fire on every update).
+        Each message is posted by a dedicated queue job (see
+        _post_message): the notified tasks are flagged in
+        notified_task_ids in the same transaction that enqueues the
+        jobs, so that each task link is posted only once per pull
+        request (avoids message spam, since PR/MR events fire on every
+        update) and a failed post can be retried without duplicates.
 
         :param dict event: The webhook event (passed down to the
             per-source _post_message implementations, e.g. for the
@@ -131,6 +134,11 @@ class ProjectGitPullRequest(models.Model):
         self.ensure_one()
         git_pull_request = self.sudo()
         tasks_to_notify = git_pull_request.task_ids - git_pull_request.notified_task_ids
+        # The job descriptions locate the PR/MR by its platform
+        # coordinates (unique, unlike the title)
+        platform_label = dict(
+            self._fields["source"].get_description(self.env)["selection"]
+        )[git_pull_request.source]
         for task in tasks_to_notify:
             url = task._notify_get_action_link("view")
             message = _(
@@ -138,7 +146,17 @@ class ProjectGitPullRequest(models.Model):
                 id=task.id,
                 url=url,
             )
-            git_pull_request._post_message(message, event)
+            git_pull_request.with_delay(
+                description=_(
+                    "%(platform)s: Post task #%(task_id)s link on "
+                    "Request ID=%(id_request)s (Repo ID=%(id_project)s)",
+                    platform=platform_label,
+                    task_id=task.id,
+                    id_request=git_pull_request.id_request,
+                    id_project=git_pull_request.id_project,
+                ),
+                identity_key=f"project_git.task_link:{git_pull_request.id}:{task.id}",
+            )._post_message(message, event)
         if tasks_to_notify:
             git_pull_request.notified_task_ids = [
                 (4, task.id) for task in tasks_to_notify
@@ -176,7 +194,8 @@ class ProjectGitPullRequest(models.Model):
           exist;
         - no task reference at all (only for repositories related to an
           Odoo project, to avoid commenting unrelated repositories).
-        Posted only on PR opening or title change (anti-spam). Model
+        Posted only on PR opening or title change (anti-spam), by a
+        dedicated queue job per message (see _post_message). Model
         method: in these cases the PR/MR is usually not tracked in Odoo,
         so the message posting relies on the event for identification.
 
@@ -215,17 +234,51 @@ class ProjectGitPullRequest(models.Model):
             for task_id in title_task_references
             if task_id not in referenced_tasks.ids
         ]
+        # The PR/MR is identified by its platform ids (no record to
+        # rely on: the PR/MR is usually not tracked)
+        id_project, id_request = git_event._dispatch_by_source(
+            event, "_extract_pr_identifiers"
+        )
+        platform_label = dict(
+            self._fields["source"].get_description(self.env)["selection"]
+        )[event.get("source")]
         if missing_task_ids:
+            # Broken explicit reference(s): "taskid#<id>" in the title
+            # pointing to tasks that do not exist (prevails on the other warning)
             message = _(
                 "The task id(s) %(ids)s cannot be found in Odoo.",
                 ids=", ".join(f"#{task_id}" for task_id in missing_task_ids),
             )
-            self._post_message(message, event)
+            job_description = _(
+                "%(platform)s: Post missing tasks warning on "
+                "Request ID=%(id_request)s (Repo ID=%(id_project)s)",
+                platform=platform_label,
+                id_request=id_request,
+                id_project=id_project,
+            )
+            warning_kind = "missing_tasks"
         elif not matching_tasks and repository_projects:
+            # No task matched at all, on a repository linked to an Odoo
+            # project (unrelated repositories are left alone)
             message = self.env["ir.qweb"]._render(
                 "project_git.no_task_reference_in_title"
             )
-            self._post_message(message, event)
+            job_description = _(
+                "%(platform)s: Post no reference warning on "
+                "Request ID=%(id_request)s (Repo ID=%(id_project)s)",
+                platform=platform_label,
+                id_request=id_request,
+                id_project=id_project,
+            )
+            warning_kind = "no_reference"
+        else:
+            # Nothing to warn: some task matched, or unrelated repository
+            return
+        self.with_delay(
+            description=job_description,
+            identity_key=f"project_git.{warning_kind}:{event.get('source')}:"
+            f"{id_project}:{id_request}",
+        )._post_message(message, event)
 
     def _post_message(self, message, event=None):
         """Post a message on the PR/MR on its source platform.
@@ -234,6 +287,13 @@ class ProjectGitPullRequest(models.Model):
         or on an empty recordset with the event as identification
         fallback (e.g. warnings for PRs not tracked in Odoo). The
         per-source implementations live in the platform bridges.
+
+        Queue job method: the posting is the only side effect of the
+        job, so a failed job can be safely retried. The bridges raise
+        RetryableJobError on transient API errors (network failures,
+        rate limits, 5xx) to retry automatically; any other error
+        leaves the job failed in the queue, to be inspected and
+        requeued by hand.
         """
         if self:
             self.ensure_one()

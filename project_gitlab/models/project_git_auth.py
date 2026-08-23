@@ -17,10 +17,15 @@ class ProjectGitAuth(models.AbstractModel):
         """Connect to the gitlab instance hosting the given project URL
         and return the gitlab client object.
 
+        retry_transient_errors makes the client retry on the spot the
+        server errors, network failures and timeouts, on top of the
+        rate limits it retries by default (waiting for the Retry-After
+        delay).
+
         :param str url: a project-level URL (e.g. project web_url); the
             instance root is derived from it, and selects the per-instance
             token sysparam (project_gitlab.token.<instance root>)
         """
         url = urljoin(url, "../..")
         token = self._get_token_param("project_gitlab.token." + url)
-        return gitlab.Gitlab(url, private_token=token)
+        return gitlab.Gitlab(url, private_token=token, retry_transient_errors=True)

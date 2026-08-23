@@ -3,10 +3,25 @@
 
 import re
 
+import requests
+
 from odoo import api, models
 
 TASK_NAME_MATCH_REGEX = r"\b[A-Z][A-Z]+-\d+\b"
 TASK_ID_REFERENCE_REGEX = r"\b(?:task|t)id#(?P<id>\d+)\b"
+
+# Platform API failures worth retrying later by the job (see
+# project.git.pull.request _post_message) once the platform library
+# gave up its own retries: HTTP statuses of rate limits and server
+# errors, and the network-level errors of the requests-based platform
+# libraries (RetryError = retries exhausted by the library itself)
+TRANSIENT_HTTP_CODES = (429, 500, 502, 503, 504)
+TRANSIENT_REQUEST_ERRORS = (
+    requests.ConnectionError,
+    requests.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+    requests.exceptions.RetryError,
+)
 
 
 class ProjectGitUtils(models.AbstractModel):

@@ -21,6 +21,11 @@ Connect your GitHub repositories, step by step:
    the API calls fail with an explicit error: replace it with a real
    token.
 
+   The GitHub API rate limits are handled automatically (the library
+   waits for the limit reset before going on): a single token
+   comfortably serves a normal activity, but with a high event volume
+   consider a token dedicated to this integration.
+
 3. **Deploy the webhook** with the **Create Webhooks** button on the
    project form (**Project > Configuration > Projects**, open the
    project; to configure it by hand instead, use the repository page on

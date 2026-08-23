@@ -422,18 +422,19 @@ pipeline status</p>
 <li><a class="reference internal" href="#which-entity-gets-linked" id="toc-entry-11">Which entity gets linked</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#troubleshooting" id="toc-entry-12">Troubleshooting</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#development" id="toc-entry-12">Development</a><ul>
-<li><a class="reference internal" href="#writing-a-platform-bridge" id="toc-entry-13">Writing a platform bridge</a></li>
+<li><a class="reference internal" href="#development" id="toc-entry-13">Development</a><ul>
+<li><a class="reference internal" href="#writing-a-platform-bridge" id="toc-entry-14">Writing a platform bridge</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#known-issues-roadmap" id="toc-entry-14">Known issues / Roadmap</a></li>
-<li><a class="reference internal" href="#bug-tracker" id="toc-entry-15">Bug Tracker</a></li>
-<li><a class="reference internal" href="#credits" id="toc-entry-16">Credits</a><ul>
-<li><a class="reference internal" href="#authors" id="toc-entry-17">Authors</a></li>
-<li><a class="reference internal" href="#contributors" id="toc-entry-18">Contributors</a></li>
-<li><a class="reference internal" href="#maintainers" id="toc-entry-19">Maintainers</a></li>
+<li><a class="reference internal" href="#known-issues-roadmap" id="toc-entry-15">Known issues / Roadmap</a></li>
+<li><a class="reference internal" href="#bug-tracker" id="toc-entry-16">Bug Tracker</a></li>
+<li><a class="reference internal" href="#credits" id="toc-entry-17">Credits</a><ul>
+<li><a class="reference internal" href="#authors" id="toc-entry-18">Authors</a></li>
+<li><a class="reference internal" href="#contributors" id="toc-entry-19">Contributors</a></li>
+<li><a class="reference internal" href="#maintainers" id="toc-entry-20">Maintainers</a></li>
 </ul>
 </li>
 </ul>
@@ -556,7 +557,10 @@ the <strong>Project &gt; Git</strong> menu (<strong>Pull Requests</strong>, <str
 </ol>
 <p>When a task is linked to a PR/MR (typically on opening), a message with
 the task link is posted on the PR/MR, and the task tags track the PR/MR
-and CI pipeline status.</p>
+and CI pipeline status. A PR/MR opened without any task reference on a
+mapped repository, or referencing a <tt class="docutils literal">taskid#</tt> that does not exist,
+gets a warning message instead (posted on opening and title changes
+only).</p>
 <p>Entities referencing no task are not recorded at all, so unrelated
 repositories can safely share the same webhook endpoint.</p>
 <div class="section" id="how-the-matching-works">
@@ -691,11 +695,31 @@ branch)</td>
 PR/MR itself.</p>
 </div>
 </div>
+<div class="section" id="troubleshooting">
+<h3><a class="toc-backref" href="#toc-entry-12">Troubleshooting</a></h3>
+<p>Every webhook event is processed by a <tt class="docutils literal">queue_job</tt> job, and each
+message posted on a PR/MR (task link, warning) by a dedicated job of its
+own: with the developer mode activated, the jobs are listed under
+<strong>Queue Job &gt; Jobs</strong>.</p>
+<ul class="simple">
+<li>An event that produced nothing on the tasks: open its job (method
+<tt class="docutils literal">_process_&lt;event&gt;_&lt;platform&gt;</tt>), the traceback of a failed job tells
+what went wrong; fix the cause (typically a configuration issue) and
+requeue the job from its form — the processing is idempotent.</li>
+<li>A PR/MR message that never showed up: when the platform API is
+unreachable, rate limited or in error, the platform library retries
+the call on the spot and, if that is not enough, the posting job is
+retried later (spaced out over time); it ends up <em>failed</em> when the API
+keeps failing or rejects the call (e.g. a token without the write
+permission). The posting is the only effect of the job, so requeuing
+it never posts duplicates.</li>
+</ul>
+</div>
 </div>
 <div class="section" id="development">
-<h2><a class="toc-backref" href="#toc-entry-12">Development</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-13">Development</a></h2>
 <div class="section" id="writing-a-platform-bridge">
-<h3><a class="toc-backref" href="#toc-entry-13">Writing a platform bridge</a></h3>
+<h3><a class="toc-backref" href="#toc-entry-14">Writing a platform bridge</a></h3>
 <p>A bridge module (see <tt class="docutils literal">project_github</tt> / <tt class="docutils literal">project_gitlab</tt> as
 references) connects one git hosting platform to this base. It provides:</p>
 <ol class="arabic">
@@ -799,7 +823,7 @@ as above.</p>
 </div>
 </div>
 <div class="section" id="known-issues-roadmap">
-<h2><a class="toc-backref" href="#toc-entry-14">Known issues / Roadmap</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-15">Known issues / Roadmap</a></h2>
 <ul class="simple">
 <li>Pipeline tracking is currently GitLab-only; GitHub Actions support
 could be added in the same way (the CI status and tags already live in
@@ -820,7 +844,7 @@ event is safe.</li>
 </ul>
 </div>
 <div class="section" id="bug-tracker">
-<h2><a class="toc-backref" href="#toc-entry-15">Bug Tracker</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-16">Bug Tracker</a></h2>
 <p>Bugs are tracked on <a class="reference external" href="https://github.com/OCA/project/issues">GitHub Issues</a>.
 In case of trouble, please check there if your issue has already been reported.
 If you spotted it first, help us to smash it by providing a detailed and welcomed
@@ -828,23 +852,23 @@ If you spotted it first, help us to smash it by providing a detailed and welcome
 <p>Do not contact contributors directly about support or help with technical issues.</p>
 </div>
 <div class="section" id="credits">
-<h2><a class="toc-backref" href="#toc-entry-16">Credits</a></h2>
+<h2><a class="toc-backref" href="#toc-entry-17">Credits</a></h2>
 <div class="section" id="authors">
-<h3><a class="toc-backref" href="#toc-entry-17">Authors</a></h3>
+<h3><a class="toc-backref" href="#toc-entry-18">Authors</a></h3>
 <ul class="simple">
 <li>Jarsa</li>
 <li>Francesco Ballerini</li>
 </ul>
 </div>
 <div class="section" id="contributors">
-<h3><a class="toc-backref" href="#toc-entry-18">Contributors</a></h3>
+<h3><a class="toc-backref" href="#toc-entry-19">Contributors</a></h3>
 <ul class="simple">
 <li>Jesús Alan Ramos Rodríguez &lt;<a class="reference external" href="mailto:alan.ramos&#64;jarsa.com.mx">alan.ramos&#64;jarsa.com.mx</a>&gt;</li>
 <li>Francesco Ballerini &lt;<a class="reference external" href="mailto:francescobl.lavoro&#64;gmail.com">francescobl.lavoro&#64;gmail.com</a>&gt;</li>
 </ul>
 </div>
 <div class="section" id="maintainers">
-<h3><a class="toc-backref" href="#toc-entry-19">Maintainers</a></h3>
+<h3><a class="toc-backref" href="#toc-entry-20">Maintainers</a></h3>
 <p>This module is maintained by the OCA.</p>
 <a class="reference external image-reference" href="https://odoo-community.org">
 <img alt="Odoo Community Association" src="https://odoo-community.org/logo.png" />

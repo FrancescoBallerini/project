@@ -14,6 +14,7 @@ from odoo.addons.project_git.tests.common import (
 )
 from odoo.addons.project_github.controllers.main import ProjectGithubWebhook
 from odoo.addons.project_github.models.project_git_auth import ProjectGitAuth
+from odoo.addons.queue_job.tests.common import trap_jobs
 
 __all__ = ["GITHUB_REPO_URL", "NULL_SHA", "ProjectGithubCase"]
 
@@ -40,9 +41,14 @@ class ProjectGithubCase(ProjectGitCase):
             event=event, headers=headers
         )
 
-    def _dispatch(self, payload, source, headers=None):
+    def _dispatch(self, payload, source, headers=None, perform_jobs=True):
         """Normalize the payload like the controller does, then run the
-        matching ``_process_*`` handler synchronously."""
+        matching ``_process_*`` handler synchronously.
+
+        The jobs enqueued by the handler (PR/MR message posting) are
+        trapped and performed right away, so the tests see the whole
+        outcome; with perform_jobs=False they are left to the caller's
+        own ``trap_jobs()`` context for inspection."""
         event = self._parse(payload, source, headers=headers)
         # Event types the source binds no handler for (e.g. tag_push)
         # are skipped, like the controller does
@@ -50,8 +56,14 @@ class ProjectGithubCase(ProjectGitCase):
         # Run as the public user like the real webhook jobs do, so that
         # every processing path is exercised with the job permissions
         public_git_event = self.git_event.with_user(self.env.ref("base.public_user"))
-        if hasattr(public_git_event, method_name):
+        if not hasattr(public_git_event, method_name):
+            return event
+        if not perform_jobs:
             getattr(public_git_event, method_name)(event)
+            return event
+        with trap_jobs() as jobs_trap:
+            getattr(public_git_event, method_name)(event)
+            jobs_trap.perform_enqueued_jobs()
         return event
 
     # ---- outbound API mocks ----

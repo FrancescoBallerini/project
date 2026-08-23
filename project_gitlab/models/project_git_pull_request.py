@@ -2,7 +2,15 @@
 # Copyright 2026 Francesco Ballerini
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl.html).
 
-from odoo import fields, models
+from gitlab.exceptions import GitlabError
+
+from odoo import _, fields, models
+
+from odoo.addons.project_git.models.project_git_utils import (
+    TRANSIENT_HTTP_CODES,
+    TRANSIENT_REQUEST_ERRORS,
+)
+from odoo.addons.queue_job.exception import RetryableJobError
 
 
 class ProjectGitPullRequest(models.Model):
@@ -32,6 +40,14 @@ class ProjectGitPullRequest(models.Model):
     def _post_message_gitlab(self, message, event=None):
         """Post a comment (discussion) on the GitLab merge request.
 
+        Two-level retry: python-gitlab retries on the spot (rate limits
+        - honouring Retry-After -, server errors and network failures,
+        see _connect_gitlab); the transient errors caught here are the
+        ones left after its retries and postpone the job (queue_job
+        default retry interval and max retries), covering a longer
+        API unavailability without blocking the queue. Any other
+        error fails the job as is.
+
         The event, when available, is the preferred source for the GitLab
         instance base URL (project.web_url is authoritative on any GitLab
         version). Without an event the URL falls back to the record MR
@@ -45,7 +61,16 @@ class ProjectGitPullRequest(models.Model):
             request_id = event["object_attributes"]["iid"]
         web_url = event["project"]["web_url"] if event else self.url.split("/-/")[0]
         gitlab_client = self.env["project.git.auth"]._connect_gitlab(url=web_url)
-        project = gitlab_client.projects.get(project_id)
-        merge_request = project.mergerequests.get(request_id)
-        merge_request.discussions.create({"body": message})
+        try:
+            project = gitlab_client.projects.get(project_id)
+            merge_request = project.mergerequests.get(request_id)
+            merge_request.discussions.create({"body": message})
+        except TRANSIENT_REQUEST_ERRORS as error:
+            raise RetryableJobError(_("GitLab API unreachable: %s", error)) from error
+        except GitlabError as error:
+            if error.response_code not in TRANSIENT_HTTP_CODES:
+                raise
+            raise RetryableJobError(
+                _("GitLab API temporary error (%s)", error.response_code)
+            ) from error
         return True

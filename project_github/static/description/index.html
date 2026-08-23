@@ -427,6 +427,10 @@ usable commit information to fall back on).</p>
 <p>A missing token — or the demo default shipped by the module — makes
 the API calls fail with an explicit error: replace it with a real
 token.</p>
+<p>The GitHub API rate limits are handled automatically (the library
+waits for the limit reset before going on): a single token
+comfortably serves a normal activity, but with a high event volume
+consider a token dedicated to this integration.</p>
 </li>
 <li><p class="first"><strong>Deploy the webhook</strong> with the <strong>Create Webhooks</strong> button on the
 project form (<strong>Project &gt; Configuration &gt; Projects</strong>, open the
