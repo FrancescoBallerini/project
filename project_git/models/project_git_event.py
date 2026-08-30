@@ -124,8 +124,8 @@ class ProjectGitEvent(models.Model):
         """
         if repository_projects is None:
             repository_projects = self._get_related_projects_by_url(event=event)
-        source_branch = self._extract_branch_names_from_event(event)["source_branch"]
-        pr_title = self._extract_pr_title_from_event(event)
+        source_branch = self._get_branch_names_from_event(event)["source_branch"]
+        pr_title = self._get_pr_title_from_event(event)
         # task match against branch name
         matching_tasks = self._find_matching_tasks(
             projects=repository_projects, pattern_text=source_branch
@@ -135,9 +135,7 @@ class ProjectGitEvent(models.Model):
             projects=repository_projects, pattern_text=pr_title
         )
         commit_matches = []
-        commits = self._fetch_pr_commits(event) or self._extract_pr_fallback_commits(
-            event
-        )
+        commits = self._fetch_pr_commits(event) or self._get_pr_fallback_commits(event)
         # task match against PR/MR commits
         for commit in commits:
             commit_matching_tasks = self._find_matching_tasks(
@@ -149,7 +147,7 @@ class ProjectGitEvent(models.Model):
         return matching_tasks, commit_matches
 
     @api.model
-    def _extract_branch_names_from_event(self, event):
+    def _get_branch_names_from_event(self, event):
         """Extract source and target branch names from the event.
 
         Returns dict with:
@@ -162,13 +160,13 @@ class ProjectGitEvent(models.Model):
         :return: dict with 'source_branch' and 'target_branch' keys
             (empty strings if not present)
         """
-        return self._dispatch_by_source(event, "_extract_branch_names_from_event") or {
+        return self._dispatch_by_source(event, "_get_branch_names_from_event") or {
             "source_branch": "",
             "target_branch": "",
         }
 
     @api.model
-    def _extract_branch_names_from_ref(self, event):
+    def _get_branch_names_from_ref(self, event):
         """Extract the branch names of a push-type event (branch
         creation/deletion, commit push) from its ref field.
 
@@ -190,16 +188,16 @@ class ProjectGitEvent(models.Model):
         }
 
     @api.model
-    def _extract_pr_title_from_event(self, event):
+    def _get_pr_title_from_event(self, event):
         """Extract the PR/MR title from the event based on event source.
 
         :param dict event: The webhook event
         :return: title string (empty string if not present)
         """
-        return self._dispatch_by_source(event, "_extract_pr_title_from_event") or ""
+        return self._dispatch_by_source(event, "_get_pr_title_from_event") or ""
 
     @api.model
-    def _extract_pr_fallback_commits(self, event):
+    def _get_pr_fallback_commits(self, event):
         """Extract the PR/MR head commit carried by the event payload itself.
 
         Used as fallback when the full commit list cannot be fetched
@@ -214,11 +212,20 @@ class ProjectGitEvent(models.Model):
                  list if the event carries no head commit)
         """
         return (
-            self._dispatch_by_source(
-                event, "_extract_pr_fallback_commits", mandatory=False
-            )
+            self._dispatch_by_source(event, "_get_pr_fallback_commits", mandatory=False)
             or []
         )
+
+    @api.model
+    def _get_pr_identifiers(self, event):
+        """Get the platform identifiers of the PR/MR carried by the event
+        (identifiers are only unique per platform).
+
+        :param dict event: The webhook event
+        :return: (id_project, id_request) tuple (None if the source
+            implements no hook)
+        """
+        return self._dispatch_by_source(event, "_get_pr_identifiers")
 
     @api.model
     def _find_matching_tasks(self, projects, pattern_text):
@@ -251,7 +258,7 @@ class ProjectGitEvent(models.Model):
 
         # Explicit id references: global, not restricted to the projects
         # (references to non-existent tasks are dropped by exists())
-        referenced_task_ids = self.env["project.git.utils"]._extract_task_id_references(
+        referenced_task_ids = self.env["project.git.utils"]._get_task_id_references(
             pattern_text
         )
         matching_tasks |= (
@@ -462,7 +469,7 @@ class ProjectGitEvent(models.Model):
         """Common processing for branch creation events, shared by the
         per-source _process_* handlers of the platform bridges, with
         granular task matching (see _link_push_entities_to_tasks)."""
-        branch_name = self._extract_branch_names_from_event(event)["source_branch"]
+        branch_name = self._get_branch_names_from_event(event)["source_branch"]
         if not branch_name:
             return
         repository_projects = self._get_related_projects_by_url(event=event)
@@ -508,7 +515,7 @@ class ProjectGitEvent(models.Model):
         it): events from unmapped repositories are processed too, and
         simply create nothing unless they carry explicit id references.
         """
-        branch_name = self._extract_branch_names_from_event(event)["source_branch"]
+        branch_name = self._get_branch_names_from_event(event)["source_branch"]
         tasks_from_branch = self._find_matching_tasks(
             projects=projects, pattern_text=branch_name
         )
@@ -580,7 +587,7 @@ class ProjectGitEvent(models.Model):
         # Get name from values or extract from event
         branch_name = values_by_arg.get("name")
         if not branch_name:
-            branch_names = self._extract_branch_names_from_event(event)
+            branch_names = self._get_branch_names_from_event(event)
             branch_name = branch_names["source_branch"]
 
         # Get URL from values or build from event
@@ -619,7 +626,7 @@ class ProjectGitEvent(models.Model):
         id_request/id_project (identifiers are only unique per platform)
         :param dict event: git event
         :return: existing pull request or empty recordset"""
-        pr_identifiers = self._dispatch_by_source(event, "_extract_pr_identifiers")
+        pr_identifiers = self._get_pr_identifiers(event)
         if not pr_identifiers:
             return self.env["project.git.pull.request"]
         project_id, request_id = pr_identifiers
@@ -668,7 +675,7 @@ class ProjectGitEvent(models.Model):
         url_to_search = branch_url
         if not url_to_search and event:
             # Extract branch name from event
-            branch_names = self._extract_branch_names_from_event(event)
+            branch_names = self._get_branch_names_from_event(event)
             branch_name = branch_names["source_branch"]
             if branch_name:
                 # Build URL from event

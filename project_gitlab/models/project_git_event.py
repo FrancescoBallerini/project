@@ -60,7 +60,7 @@ class ProjectGitEvent(models.Model):
             )
         return True
 
-    def _extract_branch_names_from_event_gitlab(self, event):
+    def _get_branch_names_from_event_gitlab(self, event):
         if event.get("project_git_event_type") == "merge_request":
             obj_attrs = event.get("object_attributes", {})
             return {
@@ -68,12 +68,12 @@ class ProjectGitEvent(models.Model):
                 "target_branch": obj_attrs.get("target_branch", ""),
             }
         # push events carry the git-native ref
-        return self._extract_branch_names_from_ref(event)
+        return self._get_branch_names_from_ref(event)
 
-    def _extract_pr_title_from_event_gitlab(self, event):
+    def _get_pr_title_from_event_gitlab(self, event):
         return event.get("object_attributes", {}).get("title", "")
 
-    def _extract_pr_fallback_commits_gitlab(self, event):
+    def _get_pr_fallback_commits_gitlab(self, event):
         # A MR without commits yet carries last_commit: null
         last_commit = event.get("object_attributes", {}).get("last_commit")
         return [last_commit] if last_commit else []
@@ -246,6 +246,6 @@ class ProjectGitEvent(models.Model):
         # Merge with values_by_arg (task_id, etc.)
         return {**default_vals, **values_by_arg}
 
-    def _extract_pr_identifiers_gitlab(self, event):
+    def _get_pr_identifiers_gitlab(self, event):
         """Return the (id_project, id_request) pair identifying the MR."""
         return event["project"]["id"], event["object_attributes"]["iid"]

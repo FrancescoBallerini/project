@@ -46,7 +46,7 @@ class ProjectGitUtils(models.AbstractModel):
         return TASK_NAME_MATCH_REGEX
 
     @api.model
-    def _extract_task_id_references(self, text):
+    def _get_task_id_references(self, text):
         """Extract the explicit task id references ("taskid#123" or
         "tid#123", case-insensitive) from a text. Every occurrence is
         considered.

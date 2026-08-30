@@ -210,7 +210,7 @@ class ProjectGitPullRequest(models.Model):
             PR/MR (see project.git.event._find_pr_matching_tasks)
         :param list(int) title_task_references: task ids referenced in
             the PR/MR title (see
-            project.git.utils._extract_task_id_references)
+            project.git.utils._get_task_id_references)
         :param repository_projects: project.project recordset related
             to the event repository
         """
@@ -224,10 +224,10 @@ class ProjectGitPullRequest(models.Model):
                 event, repository_projects=repository_projects
             )
         if title_task_references is None:
-            pr_title = git_event._extract_pr_title_from_event(event)
+            pr_title = git_event._get_pr_title_from_event(event)
             title_task_references = self.env[
                 "project.git.utils"
-            ]._extract_task_id_references(pr_title)
+            ]._get_task_id_references(pr_title)
         referenced_tasks = (
             self.env["project.task"].sudo().browse(title_task_references).exists()
         )
@@ -238,9 +238,7 @@ class ProjectGitPullRequest(models.Model):
         ]
         # The PR/MR is identified by its platform ids (no record to
         # rely on: the PR/MR is usually not tracked)
-        id_project, id_request = git_event._dispatch_by_source(
-            event, "_extract_pr_identifiers"
-        )
+        id_project, id_request = git_event._get_pr_identifiers(event)
         platform_label = dict(
             self._fields["source"].get_description(self.env)["selection"]
         )[event.get("source")]

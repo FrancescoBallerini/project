@@ -58,21 +58,21 @@ connects one git hosting platform to this base. It provides:
 
    - the hooks required by the helpers you delegate to
      (`_dispatch_by_source` warns when one is missing):
-     `_extract_pr_title_from_event_<source>`,
-     `_extract_branch_names_from_event_<source>`,
+     `_get_pr_title_from_event_<source>`,
+     `_get_branch_names_from_event_<source>`,
      `_build_source_branch_url_<source>`, `_fetch_pr_commits_<source>`,
      `_prepare_pull_request_vals_<source>`,
-     `_extract_pr_identifiers_<source>`. Each one maps a platform
+     `_get_pr_identifiers_<source>`. Each one maps a platform
      detail onto the shared flow, e.g.:
 
      ```python
-     def _extract_pr_title_from_event_github(self, event):
+     def _get_pr_title_from_event_github(self, event):
          return event.get("pull_request", {}).get("title", "")
      ```
 
    - the optional hooks (silently skipped when missing):
      `_prepare_commit_vals_<source>` (per-platform name/description),
-     `_extract_pr_fallback_commits_<source>` (implement only if your
+     `_get_pr_fallback_commits_<source>` (implement only if your
      payload carries honest head-commit data).
 
    **Normalized commit format**: every commit dict crossing the

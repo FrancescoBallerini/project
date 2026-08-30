@@ -32,7 +32,7 @@ class ProjectGitEvent(models.Model):
         """Process a GitHub branch deletion event."""
         return self._process_branch_deletion_event(event)
 
-    def _extract_branch_names_from_event_github(self, event):
+    def _get_branch_names_from_event_github(self, event):
         """GitHub Pull Request form; push events carry the git-native ref."""
         if event.get("project_git_event_type") == "pull_request":
             pr_data = event.get("pull_request", {})
@@ -41,9 +41,9 @@ class ProjectGitEvent(models.Model):
                 "target_branch": pr_data.get("base", {}).get("ref", ""),
             }
         # push events carry the git-native ref
-        return self._extract_branch_names_from_ref(event)
+        return self._get_branch_names_from_ref(event)
 
-    def _extract_pr_title_from_event_github(self, event):
+    def _get_pr_title_from_event_github(self, event):
         return event.get("pull_request", {}).get("title", "")
 
     def _build_source_branch_url_github(self, event, branch_name):
@@ -174,6 +174,6 @@ class ProjectGitEvent(models.Model):
         # Merge with values_by_arg (task_id, etc.)
         return {**default_vals, **values_by_arg}
 
-    def _extract_pr_identifiers_github(self, event):
+    def _get_pr_identifiers_github(self, event):
         """Return the (id_project, id_request) pair identifying the PR."""
         return event["repository"]["id"], event["number"]

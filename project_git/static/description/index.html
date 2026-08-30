@@ -788,21 +788,21 @@ whole logic itself.</p>
 </li>
 <li><p class="first">the hooks required by the helpers you delegate to
 (<tt class="docutils literal">_dispatch_by_source</tt> warns when one is missing):
-<tt class="docutils literal">_extract_pr_title_from_event_&lt;source&gt;</tt>,
-<tt class="docutils literal">_extract_branch_names_from_event_&lt;source&gt;</tt>,
+<tt class="docutils literal">_get_pr_title_from_event_&lt;source&gt;</tt>,
+<tt class="docutils literal">_get_branch_names_from_event_&lt;source&gt;</tt>,
 <tt class="docutils literal">_build_source_branch_url_&lt;source&gt;</tt>,
 <tt class="docutils literal">_fetch_pr_commits_&lt;source&gt;</tt>,
 <tt class="docutils literal">_prepare_pull_request_vals_&lt;source&gt;</tt>,
-<tt class="docutils literal">_extract_pr_identifiers_&lt;source&gt;</tt>. Each one maps a platform
-detail onto the shared flow, e.g.:</p>
+<tt class="docutils literal">_get_pr_identifiers_&lt;source&gt;</tt>. Each one maps a platform detail
+onto the shared flow, e.g.:</p>
 <pre class="code python literal-block">
-<span class="k">def</span><span class="w"> </span><span class="nf">_extract_pr_title_from_event_github</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span><span class="w">
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_pr_title_from_event_github</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span><span class="w">
 </span>    <span class="k">return</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pull_request&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
 </pre>
 </li>
 <li><p class="first">the optional hooks (silently skipped when missing):
 <tt class="docutils literal">_prepare_commit_vals_&lt;source&gt;</tt> (per-platform name/description),
-<tt class="docutils literal">_extract_pr_fallback_commits_&lt;source&gt;</tt> (implement only if your
+<tt class="docutils literal">_get_pr_fallback_commits_&lt;source&gt;</tt> (implement only if your
 payload carries honest head-commit data).</p>
 </li>
 </ul>
