@@ -12,6 +12,10 @@ _logger = logging.getLogger(__name__)
 class ProjectGitEvent(models.Model):
     _inherit = "project.git.event"
 
+    # --------------------------------------------------------------------
+    # Event processing entrypoints
+    # --------------------------------------------------------------------
+
     @api.model
     def _process_pull_request_github(self, event):
         """Process a GitHub Pull Request event."""
@@ -32,6 +36,10 @@ class ProjectGitEvent(models.Model):
         """Process a GitHub branch deletion event."""
         return self._process_branch_deletion_event(event)
 
+    # --------------------------------------------------------------------
+    # Payload extraction hooks
+    # --------------------------------------------------------------------
+
     def _get_branch_names_from_event_github(self, event):
         """GitHub Pull Request form; push events carry the git-native ref."""
         if event.get("project_git_event_type") == "pull_request":
@@ -45,6 +53,10 @@ class ProjectGitEvent(models.Model):
 
     def _get_pr_title_from_event_github(self, event):
         return event.get("pull_request", {}).get("title", "")
+
+    def _get_pr_identifiers_github(self, event):
+        """Return the (id_repository, id_request) pair identifying the PR."""
+        return event["repository"]["id"], event["number"]
 
     def _get_repository_url_from_event_github(self, event):
         return event.get("repository", {}).get("html_url", "")
@@ -64,6 +76,10 @@ class ProjectGitEvent(models.Model):
             return ""
         # GitHub format: https://github.com/owner/repo/tree/branch-name
         return f"{html_url}/tree/{branch_name}"
+
+    # --------------------------------------------------------------------
+    # Platform API
+    # --------------------------------------------------------------------
 
     @api.model
     def _convert_pygithub_commit_to_dict(self, commit):
@@ -120,13 +136,9 @@ class ProjectGitEvent(models.Model):
             _logger.warning(f"Failed to fetch GitHub PR commits: {str(e)}")
             return []
 
-    def _prepare_commit_vals_github(self, event, commit):
-        # GitHub only carries the full message: derive title/description
-        commit_text_lines = commit.get("message", "").split("\n", 1)
-        return {
-            "name": commit_text_lines[0][:60],
-            "description": commit_text_lines[1] if len(commit_text_lines) > 1 else "",
-        }
+    # --------------------------------------------------------------------
+    # Prepare vals
+    # --------------------------------------------------------------------
 
     @api.model
     def _prepare_pull_request_vals_github(self, event, values=None):
@@ -188,6 +200,10 @@ class ProjectGitEvent(models.Model):
             "url": self._build_source_branch_url(event=event, branch_name=branch_name),
         }
 
-    def _get_pr_identifiers_github(self, event):
-        """Return the (id_repository, id_request) pair identifying the PR."""
-        return event["repository"]["id"], event["number"]
+    def _prepare_commit_vals_github(self, event, commit):
+        # GitHub only carries the full message: derive title/description
+        commit_text_lines = commit.get("message", "").split("\n", 1)
+        return {
+            "name": commit_text_lines[0][:60],
+            "description": commit_text_lines[1] if len(commit_text_lines) > 1 else "",
+        }

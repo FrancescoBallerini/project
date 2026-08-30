@@ -13,6 +13,10 @@ _logger = logging.getLogger(__name__)
 class ProjectGitEvent(models.Model):
     _inherit = "project.git.event"
 
+    # --------------------------------------------------------------------
+    # Event processing entrypoints
+    # --------------------------------------------------------------------
+
     @api.model
     def _process_merge_request_gitlab(self, event):
         """Process a GitLab Merge Request event."""
@@ -60,6 +64,10 @@ class ProjectGitEvent(models.Model):
             )
         return True
 
+    # --------------------------------------------------------------------
+    # Payload extraction hooks
+    # --------------------------------------------------------------------
+
     def _get_branch_names_from_event_gitlab(self, event):
         if event.get("project_git_event_type") == "merge_request":
             obj_attrs = event.get("object_attributes", {})
@@ -73,13 +81,17 @@ class ProjectGitEvent(models.Model):
     def _get_pr_title_from_event_gitlab(self, event):
         return event.get("object_attributes", {}).get("title", "")
 
-    def _get_repository_url_from_event_gitlab(self, event):
-        return event.get("project", {}).get("git_http_url", "")
-
     def _get_pr_fallback_commits_gitlab(self, event):
         # A MR without commits yet carries last_commit: null
         last_commit = event.get("object_attributes", {}).get("last_commit")
         return [last_commit] if last_commit else []
+
+    def _get_pr_identifiers_gitlab(self, event):
+        """Return the (id_repository, id_request) pair identifying the MR."""
+        return event["project"]["id"], event["object_attributes"]["iid"]
+
+    def _get_repository_url_from_event_gitlab(self, event):
+        return event.get("project", {}).get("git_http_url", "")
 
     def _build_source_branch_url_gitlab(self, event, branch_name):
         # Try to get from object_attributes.source first (MR events,
@@ -93,6 +105,10 @@ class ProjectGitEvent(models.Model):
             return ""
         # GitLab format: https://gitlab.com/owner/repo/-/tree/branch-name
         return f"{web_url}/-/tree/{branch_name}"
+
+    # --------------------------------------------------------------------
+    # Platform API
+    # --------------------------------------------------------------------
 
     @api.model
     def _convert_gitlab_commit_to_dict(self, commit, project=None):
@@ -200,12 +216,9 @@ class ProjectGitEvent(models.Model):
             _logger.warning(f"Failed to fetch GitLab MR commits: {str(e)}")
         return commit_list
 
-    def _prepare_commit_vals_gitlab(self, event, commit):
-        # GitLab carries the commit title as its own field
-        return {
-            "name": commit.get("title", ""),
-            "description": commit.get("message", ""),
-        }
+    # --------------------------------------------------------------------
+    # Prepare vals
+    # --------------------------------------------------------------------
 
     @api.model
     def _prepare_pull_request_vals_gitlab(self, event, values=None):
@@ -262,6 +275,9 @@ class ProjectGitEvent(models.Model):
             "url": self._build_source_branch_url(event=event, branch_name=branch_name),
         }
 
-    def _get_pr_identifiers_gitlab(self, event):
-        """Return the (id_repository, id_request) pair identifying the MR."""
-        return event["project"]["id"], event["object_attributes"]["iid"]
+    def _prepare_commit_vals_gitlab(self, event, commit):
+        # GitLab carries the commit title as its own field
+        return {
+            "name": commit.get("title", ""),
+            "description": commit.get("message", ""),
+        }

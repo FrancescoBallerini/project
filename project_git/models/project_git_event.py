@@ -12,6 +12,10 @@ class ProjectGitEvent(models.Model):
     _name = "project.git.event"
     _description = "Git Webhook Event Processor"
 
+    # --------------------------------------------------------------------
+    # Per-source dispatching
+    # --------------------------------------------------------------------
+
     @api.model
     def _dispatch_by_source(self, event, method_name, *args, mandatory=True, **kwargs):
         """Route a call to the platform-specific implementation
@@ -31,6 +35,10 @@ class ProjectGitEvent(models.Model):
                 f"No {method_name} implementation for source {source!r}"
             )
         return None
+
+    # --------------------------------------------------------------------
+    # Event processing
+    # --------------------------------------------------------------------
 
     @api.model
     def _process_pull_request_event(self, event):
@@ -102,6 +110,86 @@ class ProjectGitEvent(models.Model):
         return git_pull_request
 
     @api.model
+    def _process_branch_creation_event(self, event):
+        """Common processing for branch creation events, shared by the
+        per-source _process_* handlers of the platform bridges, with
+        granular task matching (see _link_push_entities_to_tasks)."""
+        self._link_push_entities_to_tasks(event)
+
+    @api.model
+    def _process_branch_deletion_event(self, event):
+        """Common processing for branch deletion events, shared by the
+        per-source _process_* handlers of the platform bridges."""
+        # Search for existing branch using the standardized helper (searches by URL)
+        existing_branch = self._search_existing_branch(event=event)
+
+        if existing_branch:
+            # For now we keep the record but we could add a 'deleted' tag or unlink here
+            pass
+
+    @api.model
+    def _process_commit_push_event(self, event):
+        """Common processing for regular commit push events, shared by
+        the per-source _process_* handlers of the platform bridges, with
+        granular task matching (see _link_push_entities_to_tasks)."""
+        if not event.get("commits"):
+            return
+        self._link_push_entities_to_tasks(event)
+
+    @api.model
+    def _link_push_entities_to_tasks(self, event, repository_projects=None):
+        """Link the branch and commits of a push-type event (commit push,
+        branch creation) to the matching tasks. Every entity is linked
+        by its own explicit reference (an issue key pattern or a
+        "taskid#<id>"/"tid#<id>" reference). Case by case:
+
+        - the branch is linked to the tasks referenced in its name.
+          The commits it carries are not: untracked commits stay one
+          click away through the branch link;
+        - a commit is linked to the tasks referenced in its own
+          message, and the link stops there: the branch it was pushed
+          to (e.g. a shared "develop") and the other commits of the
+          push are not linked.
+
+        The repository->project mapping only scopes the pattern
+        matching (explicit "taskid#"/"tid#" references work without
+        it): events from unmapped repositories are processed too, and
+        simply create nothing unless they carry explicit id references.
+
+        :param dict event: The webhook event
+        :param repository_projects: project.project recordset related to
+            the event repository; derived from the event when not given
+        """
+        if repository_projects is None:
+            repository_projects = self._get_related_projects_by_url(event=event)
+        branch_name = self._get_branch_names_from_event(event)["source_branch"]
+        tasks_from_branch = self._find_matching_tasks(
+            projects=repository_projects, pattern_text=branch_name
+        )
+
+        # The branch is a single entity per event: get/create it once
+        git_branch = self._get_or_create_branch(event=event, tasks=tasks_from_branch)
+
+        tracked_commits = self.env["project.git.commit"].sudo()
+        for commit in event.get("commits", []):
+            commit_tasks = self._find_matching_tasks(
+                projects=repository_projects, pattern_text=commit.get("message", "")
+            )
+            if commit_tasks:
+                tracked_commits |= self._get_or_create_commit(
+                    commit=commit, event=event, tasks=commit_tasks
+                )
+
+        # Correlate the tracked commits with their branch (a pre-existing
+        # branch record is enriched even without new name matches)
+        if git_branch:
+            git_branch.git_commit_ids |= tracked_commits
+
+    # --------------------------------------------------------------------
+    # Task matching
+    # --------------------------------------------------------------------
+
+    @api.model
     def _find_pr_matching_tasks(self, event, repository_projects=None):
         """High-level method matching the PR/MR of the event and its
         related entities against the tasks of the repository projects:
@@ -146,98 +234,6 @@ class ProjectGitEvent(models.Model):
                 commit_matches.append((commit, commit_matching_tasks))
                 matching_tasks |= commit_matching_tasks
         return matching_tasks, commit_matches
-
-    @api.model
-    def _get_branch_names_from_event(self, event):
-        """Extract source and target branch names from the event.
-
-        Returns dict with:
-        - source_branch: The branch where changes come from (or the only
-          branch for push events)
-        - target_branch: The branch where changes go to (only for MR/PR
-          events, empty string otherwise)
-
-        :param dict event: The webhook event
-        :return: dict with 'source_branch' and 'target_branch' keys
-            (empty strings if not present)
-        """
-        return self._dispatch_by_source(event, "_get_branch_names_from_event") or {
-            "source_branch": "",
-            "target_branch": "",
-        }
-
-    @api.model
-    def _get_branch_names_from_ref(self, event):
-        """Extract the branch names of a push-type event (branch
-        creation/deletion, commit push) from its ref field.
-
-        The 'refs/heads/<branch>' layout is git's own ref schema, not a
-        platform convention: platforms usually carry it verbatim in
-        their push payloads, so the per-source implementations can
-        share this extraction.
-        """
-        # Extract branch name from ref (e.g., 'refs/heads/feature' -> 'feature')
-        ref = event.get("ref", "")
-        if ref and ref.startswith("refs/heads/"):
-            branch_name = ref.replace("refs/heads/", "")
-        else:
-            branch_name = ref
-        # No target_branch for push events
-        return {
-            "source_branch": branch_name,
-            "target_branch": "",
-        }
-
-    @api.model
-    def _get_pr_title_from_event(self, event):
-        """Extract the PR/MR title from the event based on event source.
-
-        :param dict event: The webhook event
-        :return: title string (empty string if not present)
-        """
-        return self._dispatch_by_source(event, "_get_pr_title_from_event") or ""
-
-    @api.model
-    def _get_pr_fallback_commits(self, event):
-        """Extract the PR/MR head commit carried by the event payload itself.
-
-        Used as fallback when the full commit list cannot be fetched
-        via API (e.g. missing platform token). The per-source
-        implementation is an optional hook: platforms whose payload
-        carries no honest head-commit data (e.g. only a head sha)
-        simply do not implement it, and their PR commit tracking
-        relies on the API fetch alone.
-
-        :param dict event: The webhook event
-        :return: list with a single commit dict in webhook format (empty
-                 list if the event carries no head commit)
-        """
-        return (
-            self._dispatch_by_source(event, "_get_pr_fallback_commits", mandatory=False)
-            or []
-        )
-
-    @api.model
-    def _get_pr_identifiers(self, event):
-        """Get the platform identifiers of the PR/MR carried by the event
-        (identifiers are only unique per platform).
-
-        :param dict event: The webhook event
-        :return: (id_repository, id_request) tuple
-        """
-        return self._dispatch_by_source(event, "_get_pr_identifiers")
-
-    @api.model
-    def _get_repository_url_from_event(self, event):
-        """Get the URL of the repository the event comes from, as
-        carried by the event payload (every platform event names its
-        repository), in the form the users are expected to map on the
-        project (git_project_url / git_dev_project_url).
-
-        :param dict event: The webhook event
-        :return: repository URL string (empty string if not present)
-        """
-        return self._dispatch_by_source(event, "_get_repository_url_from_event") or ""
 
     @api.model
     def _find_matching_tasks(self, projects, pattern_text):
@@ -350,6 +346,102 @@ class ProjectGitEvent(models.Model):
 
         return repository_projects
 
+    # --------------------------------------------------------------------
+    # Payload extraction hooks
+    # --------------------------------------------------------------------
+
+    @api.model
+    def _get_branch_names_from_event(self, event):
+        """Extract source and target branch names from the event.
+
+        Returns dict with:
+        - source_branch: The branch where changes come from (or the only
+          branch for push events)
+        - target_branch: The branch where changes go to (only for MR/PR
+          events, empty string otherwise)
+
+        :param dict event: The webhook event
+        :return: dict with 'source_branch' and 'target_branch' keys
+            (empty strings if not present)
+        """
+        return self._dispatch_by_source(event, "_get_branch_names_from_event") or {
+            "source_branch": "",
+            "target_branch": "",
+        }
+
+    @api.model
+    def _get_branch_names_from_ref(self, event):
+        """Extract the branch names of a push-type event (branch
+        creation/deletion, commit push) from its ref field.
+
+        The 'refs/heads/<branch>' layout is git's own ref schema, not a
+        platform convention: platforms usually carry it verbatim in
+        their push payloads, so the per-source implementations can
+        share this extraction.
+        """
+        # Extract branch name from ref (e.g., 'refs/heads/feature' -> 'feature')
+        ref = event.get("ref", "")
+        if ref and ref.startswith("refs/heads/"):
+            branch_name = ref.replace("refs/heads/", "")
+        else:
+            branch_name = ref
+        # No target_branch for push events
+        return {
+            "source_branch": branch_name,
+            "target_branch": "",
+        }
+
+    @api.model
+    def _get_pr_title_from_event(self, event):
+        """Extract the PR/MR title from the event based on event source.
+
+        :param dict event: The webhook event
+        :return: title string (empty string if not present)
+        """
+        return self._dispatch_by_source(event, "_get_pr_title_from_event") or ""
+
+    @api.model
+    def _get_pr_fallback_commits(self, event):
+        """Extract the PR/MR head commit carried by the event payload itself.
+
+        Used as fallback when the full commit list cannot be fetched
+        via API (e.g. missing platform token). The per-source
+        implementation is an optional hook: platforms whose payload
+        carries no honest head-commit data (e.g. only a head sha)
+        simply do not implement it, and their PR commit tracking
+        relies on the API fetch alone.
+
+        :param dict event: The webhook event
+        :return: list with a single commit dict in webhook format (empty
+                 list if the event carries no head commit)
+        """
+        return (
+            self._dispatch_by_source(event, "_get_pr_fallback_commits", mandatory=False)
+            or []
+        )
+
+    @api.model
+    def _get_pr_identifiers(self, event):
+        """Get the platform identifiers of the PR/MR carried by the event
+        (identifiers are only unique per platform).
+
+        :param dict event: The webhook event
+        :return: (id_repository, id_request) tuple
+        """
+        return self._dispatch_by_source(event, "_get_pr_identifiers")
+
+    @api.model
+    def _get_repository_url_from_event(self, event):
+        """Get the URL of the repository the event comes from, as
+        carried by the event payload (every platform event names its
+        repository), in the form the users are expected to map on the
+        project (git_project_url / git_dev_project_url).
+
+        :param dict event: The webhook event
+        :return: repository URL string (empty string if not present)
+        """
+        return self._dispatch_by_source(event, "_get_repository_url_from_event") or ""
+
     @api.model
     def _build_source_branch_url(self, event, branch_name):
         """
@@ -373,6 +465,119 @@ class ProjectGitEvent(models.Model):
             self._dispatch_by_source(event, "_build_source_branch_url", branch_name)
             or ""
         )
+
+    @api.model
+    def _fetch_pr_commits(self, event):
+        """Fetch all commits from the PR/MR through the source-specific
+        platform API.
+
+        :param dict event: The webhook event
+        :return: list of commit dicts (same format as webhook)
+        """
+        return self._dispatch_by_source(event, "_fetch_pr_commits") or []
+
+    # --------------------------------------------------------------------
+    # Entity tracking: get-or-create, prepare vals, search
+    # --------------------------------------------------------------------
+
+    @api.model
+    def _get_or_create_pull_request(
+        self, event, values=None, tasks=None, update_existing=True
+    ):
+        """
+        Get or create a project.git.pull.request from a webhook event,
+        linking it to tasks.
+
+        An existing record is refreshed with the event data unless
+        update_existing=False.
+
+        :param event: The webhook event dict
+        :param values: Optional dict with additional values to override/merge
+        :param tasks: Optional project.task recordset to link to the pull request
+        :param bool update_existing: update existing pull request if found
+        :return: project.git.pull.request record (empty recordset if the
+                 pull request does not exist yet and there is no task to
+                 link it to)
+        """
+        tasks = tasks if tasks is not None else self.env["project.task"]
+
+        existing_pr = self._search_existing_pull_request(event=event)
+
+        if not existing_pr and not tasks:
+            # Entities are tracked only when related to at least one task
+            return self.env["project.git.pull.request"]
+
+        if existing_pr and update_existing:
+            existing_pr.sudo().write(
+                self._prepare_pull_request_vals(event, values=values)
+            )
+
+        git_pull_request = existing_pr
+        if not git_pull_request:
+            git_pull_request = (
+                self.env["project.git.pull.request"]
+                .sudo()
+                .create(self._prepare_pull_request_vals(event, values=values))
+            )
+
+        tasks_to_link = tasks - git_pull_request.task_ids
+        if tasks_to_link:
+            git_pull_request.sudo().write(
+                {"task_ids": [(4, task.id) for task in tasks_to_link]}
+            )
+
+        return git_pull_request
+
+    @api.model
+    def _get_or_create_branch(
+        self, event, values=None, tasks=None, update_existing=True
+    ):
+        """
+        Get or create a project.git.branch from event, linking it to tasks.
+
+        The branch is identified by URL; an existing record is refreshed
+        with the event data unless update_existing=False.
+
+        :param dict event: The webhook event
+        :param dict values: Optional dict with additional values to override/merge
+            (can include "name" and "url")
+        :param tasks: Optional project.task recordset to link to the branch
+        :param bool update_existing: update existing branch if found
+        :return: project.git.branch record (empty recordset if the branch
+                 does not exist yet and there is no task to link it to)
+        """
+        tasks = tasks if tasks is not None else self.env["project.task"]
+
+        create_or_upd_vals = self._prepare_branch_vals(event, values=values)
+        # An empty name means an empty URL too (the unique identifier):
+        # tracking such a branch would create colliding empty records
+        if not create_or_upd_vals.get("name"):
+            return self.env["project.git.branch"]
+
+        # Search existing by URL (unique identifier)
+        existing_branch = self._search_existing_branch(
+            branch_url=create_or_upd_vals.get("url"), event=event
+        )
+
+        if existing_branch and update_existing:
+            existing_branch.sudo().write(create_or_upd_vals)
+
+        git_branch = existing_branch
+        if not git_branch:
+            # Entities are tracked only when related to at least one task
+            if not tasks:
+                return self.env["project.git.branch"]
+            git_branch = (
+                self.env["project.git.branch"].sudo().create(create_or_upd_vals)
+            )
+
+        tasks_to_link = tasks - git_branch.task_ids
+        if tasks_to_link:
+            git_branch.sudo().write(
+                {"task_ids": [(4, task.id) for task in tasks_to_link]}
+            )
+
+        return git_branch
 
     @api.model
     def _get_or_create_commit(
@@ -430,141 +635,42 @@ class ProjectGitEvent(models.Model):
         return git_commit
 
     @api.model
-    def _get_or_create_branch(
-        self, event, values=None, tasks=None, update_existing=True
-    ):
-        """
-        Get or create a project.git.branch from event, linking it to tasks.
+    def _prepare_pull_request_vals(self, event, values=None):
+        """Prepare project.git.pull.request values based on event source.
 
-        The branch is identified by URL; an existing record is refreshed
-        with the event data unless update_existing=False.
+        The per-source implementations return their platform values
+        plainly: the caller values are merged over them here, so the
+        override guarantee does not depend on each bridge.
 
         :param dict event: The webhook event
-        :param dict values: Optional dict with additional values to override/merge
-            (can include "name" and "url")
-        :param tasks: Optional project.task recordset to link to the branch
-        :param bool update_existing: update existing branch if found
-        :return: project.git.branch record (empty recordset if the branch
-                 does not exist yet and there is no task to link it to)
+        :param dict values: Optional dict with values to override/merge (e.g. "task_id")
+        :return: dict of pull request values ready for create/write
         """
-        tasks = tasks if tasks is not None else self.env["project.task"]
-
-        create_or_upd_vals = self._prepare_branch_vals(event, values=values)
-        # An empty name means an empty URL too (the unique identifier):
-        # tracking such a branch would create colliding empty records
-        if not create_or_upd_vals.get("name"):
-            return self.env["project.git.branch"]
-
-        # Search existing by URL (unique identifier)
-        existing_branch = self._search_existing_branch(
-            branch_url=create_or_upd_vals.get("url"), event=event
+        values_by_arg = values or {}
+        source_vals = (
+            self._dispatch_by_source(event, "_prepare_pull_request_vals", values=values)
+            or {}
         )
-
-        if existing_branch and update_existing:
-            existing_branch.sudo().write(create_or_upd_vals)
-
-        git_branch = existing_branch
-        if not git_branch:
-            # Entities are tracked only when related to at least one task
-            if not tasks:
-                return self.env["project.git.branch"]
-            git_branch = (
-                self.env["project.git.branch"].sudo().create(create_or_upd_vals)
-            )
-
-        tasks_to_link = tasks - git_branch.task_ids
-        if tasks_to_link:
-            git_branch.sudo().write(
-                {"task_ids": [(4, task.id) for task in tasks_to_link]}
-            )
-
-        return git_branch
+        return {**source_vals, **values_by_arg}
 
     @api.model
-    def _fetch_pr_commits(self, event):
-        """Fetch all commits from the PR/MR through the source-specific
-        platform API.
+    def _prepare_branch_vals(self, event, values=None):
+        """Prepare project.git.branch values based on event source.
+
+        The per-source implementations return their platform values
+        plainly: the caller values are merged over them here, so the
+        override guarantee does not depend on each bridge.
 
         :param dict event: The webhook event
-        :return: list of commit dicts (same format as webhook)
+        :param dict values: Optional dict with values to override/merge
+            (e.g. "name", "url", "task_id")
+        :return: dict of branch values ready for create/write
         """
-        return self._dispatch_by_source(event, "_fetch_pr_commits") or []
-
-    @api.model
-    def _process_branch_creation_event(self, event):
-        """Common processing for branch creation events, shared by the
-        per-source _process_* handlers of the platform bridges, with
-        granular task matching (see _link_push_entities_to_tasks)."""
-        self._link_push_entities_to_tasks(event)
-
-    @api.model
-    def _process_branch_deletion_event(self, event):
-        """Common processing for branch deletion events, shared by the
-        per-source _process_* handlers of the platform bridges."""
-        # Search for existing branch using the standardized helper (searches by URL)
-        existing_branch = self._search_existing_branch(event=event)
-
-        if existing_branch:
-            # For now we keep the record but we could add a 'deleted' tag or unlink here
-            pass
-
-    @api.model
-    def _process_commit_push_event(self, event):
-        """Common processing for regular commit push events, shared by
-        the per-source _process_* handlers of the platform bridges, with
-        granular task matching (see _link_push_entities_to_tasks)."""
-        if not event.get("commits"):
-            return
-        self._link_push_entities_to_tasks(event)
-
-    @api.model
-    def _link_push_entities_to_tasks(self, event, repository_projects=None):
-        """Link the branch and commits of a push-type event (commit push,
-        branch creation) to the matching tasks. Every entity is linked
-        by its own explicit reference (an issue key pattern or a
-        "taskid#<id>"/"tid#<id>" reference). Case by case:
-
-        - the branch is linked to the tasks referenced in its name.
-          The commits it carries are not: untracked commits stay one
-          click away through the branch link;
-        - a commit is linked to the tasks referenced in its own
-          message, and the link stops there: the branch it was pushed
-          to (e.g. a shared "develop") and the other commits of the
-          push are not linked.
-
-        The repository->project mapping only scopes the pattern
-        matching (explicit "taskid#"/"tid#" references work without
-        it): events from unmapped repositories are processed too, and
-        simply create nothing unless they carry explicit id references.
-
-        :param dict event: The webhook event
-        :param repository_projects: project.project recordset related to
-            the event repository; derived from the event when not given
-        """
-        if repository_projects is None:
-            repository_projects = self._get_related_projects_by_url(event=event)
-        branch_name = self._get_branch_names_from_event(event)["source_branch"]
-        tasks_from_branch = self._find_matching_tasks(
-            projects=repository_projects, pattern_text=branch_name
+        values_by_arg = values or {}
+        source_vals = (
+            self._dispatch_by_source(event, "_prepare_branch_vals", values=values) or {}
         )
-
-        # The branch is a single entity per event: get/create it once
-        git_branch = self._get_or_create_branch(event=event, tasks=tasks_from_branch)
-
-        tracked_commits = self.env["project.git.commit"].sudo()
-        for commit in event.get("commits", []):
-            commit_tasks = self._find_matching_tasks(
-                projects=repository_projects, pattern_text=commit.get("message", "")
-            )
-            if commit_tasks:
-                tracked_commits |= self._get_or_create_commit(
-                    commit=commit, event=event, tasks=commit_tasks
-                )
-
-        # Correlate the tracked commits with their branch (a pre-existing
-        # branch record is enriched even without new name matches)
-        if git_branch:
-            git_branch.git_commit_ids |= tracked_commits
+        return {**source_vals, **values_by_arg}
 
     @api.model
     def _prepare_commit_vals(self, event, commit, values=None):
@@ -600,44 +706,6 @@ class ProjectGitEvent(models.Model):
         return {**default_vals, **values_by_arg}
 
     @api.model
-    def _prepare_branch_vals(self, event, values=None):
-        """Prepare project.git.branch values based on event source.
-
-        The per-source implementations return their platform values
-        plainly: the caller values are merged over them here, so the
-        override guarantee does not depend on each bridge.
-
-        :param dict event: The webhook event
-        :param dict values: Optional dict with values to override/merge
-            (e.g. "name", "url", "task_id")
-        :return: dict of branch values ready for create/write
-        """
-        values_by_arg = values or {}
-        source_vals = (
-            self._dispatch_by_source(event, "_prepare_branch_vals", values=values) or {}
-        )
-        return {**source_vals, **values_by_arg}
-
-    @api.model
-    def _prepare_pull_request_vals(self, event, values=None):
-        """Prepare project.git.pull.request values based on event source.
-
-        The per-source implementations return their platform values
-        plainly: the caller values are merged over them here, so the
-        override guarantee does not depend on each bridge.
-
-        :param dict event: The webhook event
-        :param dict values: Optional dict with values to override/merge (e.g. "task_id")
-        :return: dict of pull request values ready for create/write
-        """
-        values_by_arg = values or {}
-        source_vals = (
-            self._dispatch_by_source(event, "_prepare_pull_request_vals", values=values)
-            or {}
-        )
-        return {**source_vals, **values_by_arg}
-
-    @api.model
     def _search_existing_pull_request(self, event):
         """Search for an existing pr of the same platform by
         id_request/id_repository (identifiers are only unique per platform)
@@ -656,23 +724,6 @@ class ProjectGitEvent(models.Model):
                 ],
                 limit=1,
             )
-        )
-
-    @api.model
-    def _search_existing_commit(self, commit):
-        """Search for existing commit by full SHA (globally unique).
-
-        :param dict commit: commit data containing 'id' (full SHA)
-        :return: existing commit or empty recordset
-        """
-        full_sha = commit.get("id", "")
-        if not full_sha:
-            return self.env["project.git.commit"]
-
-        return (
-            self.env["project.git.commit"]
-            .sudo()
-            .search([("full_sha", "=", full_sha)], limit=1)
         )
 
     @api.model
@@ -708,49 +759,18 @@ class ProjectGitEvent(models.Model):
         return self.env["project.git.branch"]
 
     @api.model
-    def _get_or_create_pull_request(
-        self, event, values=None, tasks=None, update_existing=True
-    ):
+    def _search_existing_commit(self, commit):
+        """Search for existing commit by full SHA (globally unique).
+
+        :param dict commit: commit data containing 'id' (full SHA)
+        :return: existing commit or empty recordset
         """
-        Get or create a project.git.pull.request from a webhook event,
-        linking it to tasks.
+        full_sha = commit.get("id", "")
+        if not full_sha:
+            return self.env["project.git.commit"]
 
-        An existing record is refreshed with the event data unless
-        update_existing=False.
-
-        :param event: The webhook event dict
-        :param values: Optional dict with additional values to override/merge
-        :param tasks: Optional project.task recordset to link to the pull request
-        :param bool update_existing: update existing pull request if found
-        :return: project.git.pull.request record (empty recordset if the
-                 pull request does not exist yet and there is no task to
-                 link it to)
-        """
-        tasks = tasks if tasks is not None else self.env["project.task"]
-
-        existing_pr = self._search_existing_pull_request(event=event)
-
-        if not existing_pr and not tasks:
-            # Entities are tracked only when related to at least one task
-            return self.env["project.git.pull.request"]
-
-        if existing_pr and update_existing:
-            existing_pr.sudo().write(
-                self._prepare_pull_request_vals(event, values=values)
-            )
-
-        git_pull_request = existing_pr
-        if not git_pull_request:
-            git_pull_request = (
-                self.env["project.git.pull.request"]
-                .sudo()
-                .create(self._prepare_pull_request_vals(event, values=values))
-            )
-
-        tasks_to_link = tasks - git_pull_request.task_ids
-        if tasks_to_link:
-            git_pull_request.sudo().write(
-                {"task_ids": [(4, task.id) for task in tasks_to_link]}
-            )
-
-        return git_pull_request
+        return (
+            self.env["project.git.commit"]
+            .sudo()
+            .search([("full_sha", "=", full_sha)], limit=1)
+        )
