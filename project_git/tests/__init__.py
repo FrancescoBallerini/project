@@ -3,6 +3,7 @@
 
 from . import test_auth
 from . import test_controller
+from . import test_dispatch
 from . import test_matching
 from . import test_project
 from . import test_project_git_branch

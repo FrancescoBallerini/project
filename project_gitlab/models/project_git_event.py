@@ -212,11 +212,10 @@ class ProjectGitEvent(models.Model):
         """Prepare GitLab merge request values from event for ORM write/create.
 
         :param dict event: The webhook event
-        :param dict values: Optional dict with values to override/merge (e.g. "task_id")
+        :param dict values: Caller overrides, merged over the returned
+            values by the base method
         :return: dict of pull request values ready for create/write
         """
-        values_by_arg = values or {}
-
         action = event["object_attributes"].get("action")
         # A MR without commits yet carries last_commit: null
         last_commit = event["object_attributes"].get("last_commit") or {}
@@ -226,7 +225,7 @@ class ProjectGitEvent(models.Model):
             .search([("gitlab_username", "=", event["user"]["username"])], limit=1)
         )
 
-        default_vals = {
+        gitlab_vals = {
             "id_request": event["object_attributes"]["iid"],
             "id_repository": event["project"]["id"],
             "source": "gitlab",
@@ -244,10 +243,24 @@ class ProjectGitEvent(models.Model):
         # unrelated event (e.g. a title edit) must not reset the
         # approval state of an approved MR
         if action in ("approved", "unapproved"):
-            default_vals["approved"] = action == "approved"
+            gitlab_vals["approved"] = action == "approved"
 
-        # Merge with values_by_arg (task_id, etc.)
-        return {**default_vals, **values_by_arg}
+        return gitlab_vals
+
+    @api.model
+    def _prepare_branch_vals_gitlab(self, event, values=None):
+        """Prepare GitLab branch values from event for ORM write/create.
+
+        :param dict event: The webhook event
+        :param dict values: Caller overrides, merged over the returned
+            values by the base method
+        :return: dict of branch values ready for create/write
+        """
+        branch_name = self._get_branch_names_from_event(event)["source_branch"]
+        return {
+            "name": branch_name,
+            "url": self._build_source_branch_url(event=event, branch_name=branch_name),
+        }
 
     def _get_pr_identifiers_gitlab(self, event):
         """Return the (id_repository, id_request) pair identifying the MR."""

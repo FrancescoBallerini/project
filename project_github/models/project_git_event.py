@@ -133,11 +133,10 @@ class ProjectGitEvent(models.Model):
         """Prepare GitHub pull request values from event for ORM write/create.
 
         :param dict event: The webhook event
-        :param dict values: Optional dict with values to override/merge (e.g. "task_id")
+        :param dict values: Caller overrides, merged over the returned
+            values by the base method
         :return: dict of pull request values ready for create/write
         """
-        values_by_arg = values or {}
-
         user = (
             self.env["res.users"]
             .sudo()
@@ -160,7 +159,7 @@ class ProjectGitEvent(models.Model):
             else map_state[event["pull_request"]["state"]]
         )
 
-        default_vals = {
+        return {
             "id_request": event["number"],
             "id_repository": event["repository"]["id"],
             "source": "github",
@@ -174,8 +173,20 @@ class ProjectGitEvent(models.Model):
             "user_id": user.id,
         }
 
-        # Merge with values_by_arg (task_id, etc.)
-        return {**default_vals, **values_by_arg}
+    @api.model
+    def _prepare_branch_vals_github(self, event, values=None):
+        """Prepare GitHub branch values from event for ORM write/create.
+
+        :param dict event: The webhook event
+        :param dict values: Caller overrides, merged over the returned
+            values by the base method
+        :return: dict of branch values ready for create/write
+        """
+        branch_name = self._get_branch_names_from_event(event)["source_branch"]
+        return {
+            "name": branch_name,
+            "url": self._build_source_branch_url(event=event, branch_name=branch_name),
+        }
 
     def _get_pr_identifiers_github(self, event):
         """Return the (id_repository, id_request) pair identifying the PR."""

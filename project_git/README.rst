@@ -417,13 +417,16 @@ references) connects one git hosting platform to this base. It provides:
      whole logic itself.
 
    - the hooks required by the helpers you delegate to
-     (``_dispatch_by_source`` warns when one is missing):
+     (``_dispatch_by_source`` raises ``NotImplementedError`` when one is
+     missing, failing the queue job with a clear traceback):
      ``_get_repository_url_from_event_<source>`` (the URL the users map
      on the project), ``_get_pr_title_from_event_<source>``,
      ``_get_branch_names_from_event_<source>``,
      ``_build_source_branch_url_<source>``,
      ``_fetch_pr_commits_<source>``,
-     ``_prepare_pull_request_vals_<source>``,
+     ``_prepare_pull_request_vals_<source>`` and
+     ``_prepare_branch_vals_<source>`` (both return your platform values
+     plainly: the base merges the caller overrides itself),
      ``_get_pr_identifiers_<source>``. Each one maps a platform detail
      onto the shared flow, e.g.:
 

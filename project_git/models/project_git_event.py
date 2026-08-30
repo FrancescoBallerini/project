@@ -2,13 +2,10 @@
 # Copyright 2026 Francesco Ballerini
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl.html).
 
-import logging
 import re
 
 from odoo import api, models
 from odoo.osv import expression
-
-_logger = logging.getLogger(__name__)
 
 
 class ProjectGitEvent(models.Model):
@@ -20,15 +17,19 @@ class ProjectGitEvent(models.Model):
         """Route a call to the platform-specific implementation
         (<method_name>_<source>) based on event["source"].
 
-        With mandatory=True a missing implementation is warned about
-        (dispatched methods); with mandatory=False it is silently
-        skipped (optional per-source hooks of generic methods).
+        With mandatory=True a missing implementation raises: a bridge
+        is expected to provide every dispatched method, so the queue
+        job fails with a clear traceback instead of going on with
+        degraded data. With mandatory=False it is silently skipped
+        (optional per-source hooks of generic methods).
         """
         source = event.get("source")
         if hasattr(self, f"{method_name}_{source}"):
             return getattr(self, f"{method_name}_{source}")(event, *args, **kwargs)
         if mandatory:
-            _logger.warning("No %s implementation for source %r", method_name, source)
+            raise NotImplementedError(
+                f"No {method_name} implementation for source {source!r}"
+            )
         return None
 
     @api.model
@@ -222,8 +223,7 @@ class ProjectGitEvent(models.Model):
         (identifiers are only unique per platform).
 
         :param dict event: The webhook event
-        :return: (id_repository, id_request) tuple (None if the source
-            implements no hook)
+        :return: (id_repository, id_request) tuple
         """
         return self._dispatch_by_source(event, "_get_pr_identifiers")
 
@@ -353,15 +353,19 @@ class ProjectGitEvent(models.Model):
     @api.model
     def _build_source_branch_url(self, event, branch_name):
         """
-        Build the URL of the event source branch.
+        Build the URL of the event's source branch.
 
-        Each platform resolves the repository hosting the source
-        branch (the fork, for a PR/MR opened from one). The branch
-        name is passed by the callers, which already extract it.
+        The source branch may belong to a different repository, such as
+        a fork from which a PR/MR was opened. Each platform-specific
+        implementation is responsible for resolving the repository that
+        hosts the source branch.
+
+        The branch name is provided by the caller, which is responsible
+        for extracting it from the event.
 
         :param dict event: The webhook event
-        :param str branch_name: Branch name (required)
-        :return: branch URL string (empty string if cannot be built)
+        :param str branch_name: The source branch name (required)
+        :return: The branch URL, or an empty string if it cannot be built
         """
         if not branch_name:
             return ""
@@ -395,23 +399,26 @@ class ProjectGitEvent(models.Model):
 
         tasks = tasks if tasks is not None else self.env["project.task"]
 
-        create_or_upd_vals = self._prepare_commit_vals(
-            event=event, commit=commit, values=values
-        )
-
         # Search existing commit by full_sha (globally unique)
         existing_commit = self._search_existing_commit(commit=commit)
 
+        if not existing_commit and not tasks:
+            # Entities are tracked only when related to at least one task
+            return self.env["project.git.commit"]
+
         if existing_commit and update_existing:
-            existing_commit.sudo().write(create_or_upd_vals)
+            existing_commit.sudo().write(
+                self._prepare_commit_vals(event=event, commit=commit, values=values)
+            )
 
         git_commit = existing_commit
         if not git_commit:
-            # Entities are tracked only when related to at least one task
-            if not tasks:
-                return self.env["project.git.commit"]
             git_commit = (
-                self.env["project.git.commit"].sudo().create(create_or_upd_vals)
+                self.env["project.git.commit"]
+                .sudo()
+                .create(
+                    self._prepare_commit_vals(event=event, commit=commit, values=values)
+                )
             )
 
         tasks_to_link = tasks - git_commit.task_ids
@@ -443,6 +450,8 @@ class ProjectGitEvent(models.Model):
         tasks = tasks if tasks is not None else self.env["project.task"]
 
         create_or_upd_vals = self._prepare_branch_vals(event, values=values)
+        # An empty name means an empty URL too (the unique identifier):
+        # tracking such a branch would create colliding empty records
         if not create_or_upd_vals.get("name"):
             return self.env["project.git.branch"]
 
@@ -486,11 +495,7 @@ class ProjectGitEvent(models.Model):
         """Common processing for branch creation events, shared by the
         per-source _process_* handlers of the platform bridges, with
         granular task matching (see _link_push_entities_to_tasks)."""
-        branch_name = self._get_branch_names_from_event(event)["source_branch"]
-        if not branch_name:
-            return
-        repository_projects = self._get_related_projects_by_url(event=event)
-        self._link_push_entities_to_tasks(repository_projects, event)
+        self._link_push_entities_to_tasks(event)
 
     @api.model
     def _process_branch_deletion_event(self, event):
@@ -510,10 +515,10 @@ class ProjectGitEvent(models.Model):
         granular task matching (see _link_push_entities_to_tasks)."""
         if not event.get("commits"):
             return
-        repository_projects = self._get_related_projects_by_url(event=event)
-        self._link_push_entities_to_tasks(repository_projects, event)
+        self._link_push_entities_to_tasks(event)
 
-    def _link_push_entities_to_tasks(self, projects, event):
+    @api.model
+    def _link_push_entities_to_tasks(self, event, repository_projects=None):
         """Link the branch and commits of a push-type event (commit push,
         branch creation) to the matching tasks. Every entity is linked
         by its own explicit reference (an issue key pattern or a
@@ -531,10 +536,16 @@ class ProjectGitEvent(models.Model):
         matching (explicit "taskid#"/"tid#" references work without
         it): events from unmapped repositories are processed too, and
         simply create nothing unless they carry explicit id references.
+
+        :param dict event: The webhook event
+        :param repository_projects: project.project recordset related to
+            the event repository; derived from the event when not given
         """
+        if repository_projects is None:
+            repository_projects = self._get_related_projects_by_url(event=event)
         branch_name = self._get_branch_names_from_event(event)["source_branch"]
         tasks_from_branch = self._find_matching_tasks(
-            projects=projects, pattern_text=branch_name
+            projects=repository_projects, pattern_text=branch_name
         )
 
         # The branch is a single entity per event: get/create it once
@@ -543,7 +554,7 @@ class ProjectGitEvent(models.Model):
         tracked_commits = self.env["project.git.commit"].sudo()
         for commit in event.get("commits", []):
             commit_tasks = self._find_matching_tasks(
-                projects=projects, pattern_text=commit.get("message", "")
+                projects=repository_projects, pattern_text=commit.get("message", "")
             )
             if commit_tasks:
                 tracked_commits |= self._get_or_create_commit(
@@ -590,9 +601,11 @@ class ProjectGitEvent(models.Model):
 
     @api.model
     def _prepare_branch_vals(self, event, values=None):
-        """Prepare branch values from event.
+        """Prepare project.git.branch values based on event source.
 
-        Extracts branch name and URL from event using helpers if not provided in values.
+        The per-source implementations return their platform values
+        plainly: the caller values are merged over them here, so the
+        override guarantee does not depend on each bridge.
 
         :param dict event: The webhook event
         :param dict values: Optional dict with values to override/merge
@@ -600,42 +613,29 @@ class ProjectGitEvent(models.Model):
         :return: dict of branch values ready for create/write
         """
         values_by_arg = values or {}
-
-        # Get name from values or extract from event
-        branch_name = values_by_arg.get("name")
-        if not branch_name:
-            branch_names = self._get_branch_names_from_event(event)
-            branch_name = branch_names["source_branch"]
-
-        # Get URL from values or build from event
-        branch_url = values_by_arg.get("url")
-        if not branch_url:
-            branch_url = self._build_source_branch_url(
-                event=event, branch_name=branch_name
-            )
-
-        # Build base vals
-        default_vals = {
-            "name": branch_name,
-            "url": branch_url,
-        }
-
-        # Merge with values_by_arg (task_id, etc.)
-        return {**default_vals, **values_by_arg}
+        source_vals = (
+            self._dispatch_by_source(event, "_prepare_branch_vals", values=values) or {}
+        )
+        return {**source_vals, **values_by_arg}
 
     @api.model
     def _prepare_pull_request_vals(self, event, values=None):
         """Prepare project.git.pull.request values based on event source.
 
+        The per-source implementations return their platform values
+        plainly: the caller values are merged over them here, so the
+        override guarantee does not depend on each bridge.
+
         :param dict event: The webhook event
         :param dict values: Optional dict with values to override/merge (e.g. "task_id")
         :return: dict of pull request values ready for create/write
         """
-        values = values or {}
-        return (
+        values_by_arg = values or {}
+        source_vals = (
             self._dispatch_by_source(event, "_prepare_pull_request_vals", values=values)
-            or values
+            or {}
         )
+        return {**source_vals, **values_by_arg}
 
     @api.model
     def _search_existing_pull_request(self, event):
@@ -643,10 +643,7 @@ class ProjectGitEvent(models.Model):
         id_request/id_repository (identifiers are only unique per platform)
         :param dict event: git event
         :return: existing pull request or empty recordset"""
-        pr_identifiers = self._get_pr_identifiers(event)
-        if not pr_identifiers:
-            return self.env["project.git.pull.request"]
-        repository_id, request_id = pr_identifiers
+        repository_id, request_id = self._get_pr_identifiers(event)
 
         return (
             self.env["project.git.pull.request"]
@@ -731,20 +728,23 @@ class ProjectGitEvent(models.Model):
         """
         tasks = tasks if tasks is not None else self.env["project.task"]
 
-        create_or_upd_vals = self._prepare_pull_request_vals(event, values=values)
-
         existing_pr = self._search_existing_pull_request(event=event)
 
+        if not existing_pr and not tasks:
+            # Entities are tracked only when related to at least one task
+            return self.env["project.git.pull.request"]
+
         if existing_pr and update_existing:
-            existing_pr.sudo().write(create_or_upd_vals)
+            existing_pr.sudo().write(
+                self._prepare_pull_request_vals(event, values=values)
+            )
 
         git_pull_request = existing_pr
         if not git_pull_request:
-            # Entities are tracked only when related to at least one task
-            if not tasks:
-                return self.env["project.git.pull.request"]
             git_pull_request = (
-                self.env["project.git.pull.request"].sudo().create(create_or_upd_vals)
+                self.env["project.git.pull.request"]
+                .sudo()
+                .create(self._prepare_pull_request_vals(event, values=values))
             )
 
         tasks_to_link = tasks - git_pull_request.task_ids
