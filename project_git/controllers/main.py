@@ -94,9 +94,10 @@ class ProjectGitWebhook(http.Controller):
     def _parse_git_request_data(self, event, headers=None):
         """The structure of a git request differ among different sources
         (e.g. github vs gitlab). This method dispatches to the
-        source-specific parser, which fetches necessary data, creates a
-        new 'common key' in the request object and puts the data inside
-        it so it's easy to retrieve it later despite the source.
+        source-specific parser, which normalizes the request-level
+        data (source, event type) into the module-owned 'common keys'
+        of the event; the payload data is then read by the per-source
+        hooks of project.git.event.
 
         The event type lands in the module-owned
         'project_git_event_type' key: each parser maps the

@@ -73,6 +73,9 @@ class ProjectGitEvent(models.Model):
     def _get_pr_title_from_event_gitlab(self, event):
         return event.get("object_attributes", {}).get("title", "")
 
+    def _get_repository_url_from_event_gitlab(self, event):
+        return event.get("project", {}).get("git_http_url", "")
+
     def _get_pr_fallback_commits_gitlab(self, event):
         # A MR without commits yet carries last_commit: null
         last_commit = event.get("object_attributes", {}).get("last_commit")

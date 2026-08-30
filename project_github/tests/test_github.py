@@ -535,6 +535,17 @@ class TestGithubPush(ProjectGithubCase):
         self.assertFalse(self._get_branch("GH-100-readme"))
         self.assertFalse(self._get_commit("a" * 40))
 
+    def test_repository_url_is_read_from_the_payload(self):
+        # The model reads the repository URL from the payload of any
+        # GitHub event, in the form the users map on the project
+        event = self._parse(self._push_payload(), "github")
+        self.assertEqual(
+            self.git_event._get_repository_url_from_event(event), GITHUB_REPO_URL
+        )
+        self.assertEqual(
+            self.git_event._get_related_projects_by_url(event), self.github_project
+        )
+
     def test_branch_deletion_keeps_branch_record(self):
         creation = self._push_payload(
             ref="refs/heads/GH-100-feature",

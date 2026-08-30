@@ -754,12 +754,13 @@ the way your platform does (verbatim token header, payload
 signature, …).</p>
 </li>
 <li><p class="first"><tt class="docutils literal"><span class="pre">_parse_git_request_data_&lt;source&gt;(event,</span> headers)</tt>: normalize the
-payload. The parser must set the common keys <tt class="docutils literal">source</tt>,
-<tt class="docutils literal">repository_url</tt> and <tt class="docutils literal">project_git_event_type</tt> (mapped from the
-authoritative event discriminator of your platform; <tt class="docutils literal">push</tt> events
-are then refined by the base into
+request-level data. The parser must set the common keys <tt class="docutils literal">source</tt>
+and <tt class="docutils literal">project_git_event_type</tt> (mapped from the authoritative event
+discriminator of your platform; <tt class="docutils literal">push</tt> events are then refined by
+the base into
 <tt class="docutils literal">branch_creation</tt>/<tt class="docutils literal">branch_deletion</tt>/<tt class="docutils literal">commit_push</tt> via the
-git-native null-SHA schema).</p>
+git-native null-SHA schema). The payload data (repository URL,
+branch names, …) is read later by the model hooks below.</p>
 </li>
 </ul>
 </li>
@@ -788,7 +789,8 @@ whole logic itself.</p>
 </li>
 <li><p class="first">the hooks required by the helpers you delegate to
 (<tt class="docutils literal">_dispatch_by_source</tt> warns when one is missing):
-<tt class="docutils literal">_get_pr_title_from_event_&lt;source&gt;</tt>,
+<tt class="docutils literal">_get_repository_url_from_event_&lt;source&gt;</tt> (the URL the users map
+on the project), <tt class="docutils literal">_get_pr_title_from_event_&lt;source&gt;</tt>,
 <tt class="docutils literal">_get_branch_names_from_event_&lt;source&gt;</tt>,
 <tt class="docutils literal">_build_source_branch_url_&lt;source&gt;</tt>,
 <tt class="docutils literal">_fetch_pr_commits_&lt;source&gt;</tt>,

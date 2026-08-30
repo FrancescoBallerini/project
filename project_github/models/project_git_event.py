@@ -46,6 +46,9 @@ class ProjectGitEvent(models.Model):
     def _get_pr_title_from_event_github(self, event):
         return event.get("pull_request", {}).get("title", "")
 
+    def _get_repository_url_from_event_github(self, event):
+        return event.get("repository", {}).get("html_url", "")
+
     def _build_source_branch_url_github(self, event, branch_name):
         # Try to get from pull_request.head.repo first (PR events)
         html_url = (

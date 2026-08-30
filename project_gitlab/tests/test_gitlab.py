@@ -137,6 +137,18 @@ class TestGitlabPush(ProjectGitlabCase):
 
         self.assertFalse(self._get_branch("GL-100-feature"))
 
+    def test_repository_url_is_read_from_the_payload(self):
+        # The model reads the repository URL from the payload of any
+        # GitLab event, in the form the users map on the project
+        event = self._parse(self._push_payload(), "gitlab")
+        self.assertEqual(
+            self.git_event._get_repository_url_from_event(event),
+            f"{GITLAB_REPO_URL}.git",
+        )
+        self.assertEqual(
+            self.git_event._get_related_projects_by_url(event), self.gitlab_project
+        )
+
     def test_push_commit_mentioning_two_tasks_links_both(self):
         # Every pattern occurrence in a text is matched, so a commit
         # message mentioning two tasks links the commit to both.

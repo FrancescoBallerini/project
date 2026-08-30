@@ -53,9 +53,8 @@ class TestTaskMatching(ProjectGitCase):
             }
         )
         repository_projects = self.git_event._get_related_projects_by_url(
-            event={
-                "repository_url": "https://gitlab.example.com/acme/demo-dev-repo.git"
-            }
+            event={},
+            repository_url="https://gitlab.example.com/acme/demo-dev-repo.git",
         )
         self.assertEqual(repository_projects, dev_project)
 
@@ -63,11 +62,11 @@ class TestTaskMatching(ProjectGitCase):
         # gitlab_project is stored with the ".git" suffix, github_project
         # without: each must match the event URL spelled the other way
         repository_projects = self.git_event._get_related_projects_by_url(
-            event={"repository_url": GITLAB_REPO_URL}
+            event={}, repository_url=GITLAB_REPO_URL
         )
         self.assertEqual(repository_projects, self.gitlab_project)
         repository_projects = self.git_event._get_related_projects_by_url(
-            event={"repository_url": f"{GITHUB_REPO_URL}.git"}
+            event={}, repository_url=f"{GITHUB_REPO_URL}.git"
         )
         self.assertEqual(repository_projects, self.github_project)
 

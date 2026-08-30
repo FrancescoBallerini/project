@@ -24,5 +24,4 @@ class ProjectGitlabWebhook(ProjectGitWebhook):
         # GitLab carries its authoritative event discriminator in the
         # payload: map it onto the module-owned key (headers unused)
         event["project_git_event_type"] = event.get("object_kind")
-        event["repository_url"] = event.get("project", {}).get("git_http_url")
         return event

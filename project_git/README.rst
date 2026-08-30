@@ -382,12 +382,13 @@ references) connects one git hosting platform to this base. It provides:
      signature, ...).
 
    - ``_parse_git_request_data_<source>(event, headers)``: normalize the
-     payload. The parser must set the common keys ``source``,
-     ``repository_url`` and ``project_git_event_type`` (mapped from the
-     authoritative event discriminator of your platform; ``push`` events
-     are then refined by the base into
+     request-level data. The parser must set the common keys ``source``
+     and ``project_git_event_type`` (mapped from the authoritative event
+     discriminator of your platform; ``push`` events are then refined by
+     the base into
      ``branch_creation``/``branch_deletion``/``commit_push`` via the
-     git-native null-SHA schema).
+     git-native null-SHA schema). The payload data (repository URL,
+     branch names, ...) is read later by the model hooks below.
 
 2. **Model extensions on ``project.git.event``** with the per-source
    naming convention ``<method>_<source>``.
@@ -417,7 +418,8 @@ references) connects one git hosting platform to this base. It provides:
 
    - the hooks required by the helpers you delegate to
      (``_dispatch_by_source`` warns when one is missing):
-     ``_get_pr_title_from_event_<source>``,
+     ``_get_repository_url_from_event_<source>`` (the URL the users map
+     on the project), ``_get_pr_title_from_event_<source>``,
      ``_get_branch_names_from_event_<source>``,
      ``_build_source_branch_url_<source>``,
      ``_fetch_pr_commits_<source>``,

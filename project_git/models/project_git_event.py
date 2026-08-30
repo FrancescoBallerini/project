@@ -228,6 +228,18 @@ class ProjectGitEvent(models.Model):
         return self._dispatch_by_source(event, "_get_pr_identifiers")
 
     @api.model
+    def _get_repository_url_from_event(self, event):
+        """Get the URL of the repository the event comes from, as
+        carried by the event payload (every platform event names its
+        repository), in the form the users are expected to map on the
+        project (git_project_url / git_dev_project_url).
+
+        :param dict event: The webhook event
+        :return: repository URL string (empty string if not present)
+        """
+        return self._dispatch_by_source(event, "_get_repository_url_from_event") or ""
+
+    @api.model
     def _find_matching_tasks(self, projects, pattern_text):
         """
         Find the project tasks referenced by a given text (PR/MR title,
@@ -301,13 +313,18 @@ class ProjectGitEvent(models.Model):
         return matching_tasks
 
     @api.model
-    def _get_related_projects_by_url(self, event):
+    def _get_related_projects_by_url(self, event, repository_url=None):
         """
-        Get project.project records that match the repository URL from the event.
+        Get project.project records that match the repository URL of the event.
         Handles .git suffix variations automatically.
-        Returns project.project recordset.
+
+        :param dict event: The webhook event
+        :param str repository_url: Optional URL overriding the one read
+            from the event (_get_repository_url_from_event)
+        :return: project.project recordset
         """
-        repository_url = event.get("repository_url", "")
+        if repository_url is None:
+            repository_url = self._get_repository_url_from_event(event)
         if not repository_url:
             return self.env["project.project"]
 

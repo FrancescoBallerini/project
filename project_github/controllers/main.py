@@ -41,6 +41,4 @@ class ProjectGithubWebhook(ProjectGitWebhook):
             "ref", ""
         ).startswith("refs/heads/"):
             event["project_git_event_type"] = "tag_push"
-        # set repo url
-        event["repository_url"] = event.get("repository", {}).get("html_url")
         return event
