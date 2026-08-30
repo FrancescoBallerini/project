@@ -229,8 +229,8 @@ class TestGithubPullRequest(ProjectGithubCase):
             jobs_trap.assert_jobs_count(0)
 
     def test_pr_negative_match_warning_is_posted_by_dedicated_job(self):
-        # The warning job is identified by the PR platform ids (the PR
-        # is not tracked) and the warning kind
+        # The warning job is identified by the PR platform ids, scoped
+        # by the instance (the PR is not tracked), and the warning kind
         payload = self._pr_payload(title="Generic title")
         patcher, pull = self._mock_github_client()
         with patcher, trap_jobs() as jobs_trap:
@@ -242,8 +242,8 @@ class TestGithubPullRequest(ProjectGithubCase):
             self.assertEqual(jobs_trap.enqueued_jobs[0].channel, "root.project_git")
             self.assertEqual(
                 jobs_trap.enqueued_jobs[0].identity_key,
-                f"project_git.no_reference:github:{payload['repository']['id']}:"
-                f"{payload['number']}",
+                "project_git.no_reference:github:https://github.example.com/:"
+                f"{payload['repository']['id']}:{payload['number']}",
             )
             self.assertEqual(
                 jobs_trap.enqueued_jobs[0].description,

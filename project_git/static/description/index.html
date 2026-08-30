@@ -797,7 +797,9 @@ on the project), <tt class="docutils literal">_get_pr_title_from_event_&lt;sourc
 <tt class="docutils literal">_fetch_pr_commits_&lt;source&gt;</tt>,
 <tt class="docutils literal">_prepare_pull_request_vals_&lt;source&gt;</tt> and
 <tt class="docutils literal">_prepare_branch_vals_&lt;source&gt;</tt> (both return your platform values
-plainly: the base merges the caller overrides itself),
+plainly: the base merges the caller overrides itself, and derives
+on its own the <tt class="docutils literal">instance_url</tt> scoping the pull request
+identifiers, unique only within one platform instance),
 <tt class="docutils literal">_get_pr_identifiers_&lt;source&gt;</tt>. Each one maps a platform detail
 onto the shared flow, e.g.:</p>
 <pre class="code python literal-block">

@@ -13,12 +13,13 @@ from .common import GITHUB_REPO_URL, ProjectGithubCase
 
 
 class TestGithubPullRequestModel(ProjectGithubCase):
-    def test_pr_identifiers_unique_within_platform(self):
+    def test_pr_identifiers_unique_within_platform_instance(self):
         # SQL constraint guarding the search-then-create dedup of the
         # event flow against concurrent jobs on the same PR
         pull_request_vals = {
             "name": "GitHub PR",
             "source": "github",
+            "instance_url": "https://github.example.com/",
             "id_repository": 2002,
             "id_request": 2,
         }

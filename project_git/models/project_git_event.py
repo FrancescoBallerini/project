@@ -3,6 +3,7 @@
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl.html).
 
 import re
+from urllib.parse import urlparse
 
 from odoo import api, models
 from odoo.osv import expression
@@ -443,6 +444,27 @@ class ProjectGitEvent(models.Model):
         return self._dispatch_by_source(event, "_get_repository_url_from_event") or ""
 
     @api.model
+    def _get_instance_url_from_event(self, event):
+        """Get the root URL of the platform instance the event comes
+        from (e.g. https://gitlab.example.com/), taking the scheme and
+        host of the repository URL.
+
+        The root completes the PR/MR platform identifiers
+        (id_repository and id_request, see _get_pr_identifiers): they
+        are unique only within one instance, so two self-hosted
+        instances can host different PRs/MRs with the same ids. The
+        root is also a stable identifier: renaming the repository or
+        moving it to another namespace changes the repository URL,
+        but not the instance root.
+
+        :param dict event: The webhook event
+        :return: instance root URL string, with a trailing slash
+            (empty string if the repository URL is not present)
+        """
+        url_parts = urlparse(self._get_repository_url_from_event(event))
+        return f"{url_parts.scheme}://{url_parts.netloc}/" if url_parts.netloc else ""
+
+    @api.model
     def _build_source_branch_url(self, event, branch_name):
         """
         Build the URL of the event's source branch.
@@ -640,18 +662,21 @@ class ProjectGitEvent(models.Model):
 
         The per-source implementations return their platform values
         plainly: the caller values are merged over them here, so the
-        override guarantee does not depend on each bridge.
+        override guarantee does not depend on each bridge. The instance
+        URL scoping the platform identifiers is derived here too, as it
+        comes from the repository URL the same way for every source.
 
         :param dict event: The webhook event
         :param dict values: Optional dict with values to override/merge (e.g. "task_id")
         :return: dict of pull request values ready for create/write
         """
         values_by_arg = values or {}
+        default_vals = {"instance_url": self._get_instance_url_from_event(event)}
         source_vals = (
             self._dispatch_by_source(event, "_prepare_pull_request_vals", values=values)
             or {}
         )
-        return {**source_vals, **values_by_arg}
+        return {**default_vals, **source_vals, **values_by_arg}
 
     @api.model
     def _prepare_branch_vals(self, event, values=None):
@@ -707,11 +732,13 @@ class ProjectGitEvent(models.Model):
 
     @api.model
     def _search_existing_pull_request(self, event):
-        """Search for an existing pr of the same platform by
-        id_request/id_repository (identifiers are only unique per platform)
+        """Search for an existing pr of the same platform instance by
+        id_request/id_repository (identifiers are only unique per
+        instance: self-hosted instances can host colliding ids)
         :param dict event: git event
         :return: existing pull request or empty recordset"""
         repository_id, request_id = self._get_pr_identifiers(event)
+        instance_url = self._get_instance_url_from_event(event)
 
         return (
             self.env["project.git.pull.request"]
@@ -719,6 +746,7 @@ class ProjectGitEvent(models.Model):
             .search(
                 [
                     ("source", "=", event.get("source")),
+                    ("instance_url", "=", instance_url),
                     ("id_request", "=", request_id),
                     ("id_repository", "=", repository_id),
                 ],

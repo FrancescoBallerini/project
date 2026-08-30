@@ -66,7 +66,9 @@ connects one git hosting platform to this base. It provides:
      `_build_source_branch_url_<source>`, `_fetch_pr_commits_<source>`,
      `_prepare_pull_request_vals_<source>` and
      `_prepare_branch_vals_<source>` (both return your platform
-     values plainly: the base merges the caller overrides itself),
+     values plainly: the base merges the caller overrides itself,
+     and derives on its own the `instance_url` scoping the pull
+     request identifiers, unique only within one platform instance),
      `_get_pr_identifiers_<source>`. Each one maps a platform
      detail onto the shared flow, e.g.:
 

@@ -24,6 +24,13 @@ class ProjectGitPullRequest(models.Model):
         string="Repository ID",
         help="Technical field used to track the repository id on the platform",
     )
+    instance_url = fields.Char(
+        string="Instance URL",
+        help="Technical field: root URL of the platform instance hosting "
+        "the repository. It scopes the platform identifiers, which are "
+        "unique only within one instance (e.g. two self-hosted GitLab "
+        "instances can host different merge requests with the same ids).",
+    )
     # Each platform bridge adds its own value with selection_add
     source = fields.Selection([], string="Source Platform")
 
@@ -92,9 +99,9 @@ class ProjectGitPullRequest(models.Model):
     _sql_constraints = [
         (
             "source_repository_request_unique",
-            "unique(source, id_repository, id_request)",
+            "unique(source, instance_url, id_repository, id_request)",
             "A pull request with the same identifiers is already tracked"
-            " for this platform.",
+            " for this platform instance.",
         )
     ]
 
@@ -236,9 +243,10 @@ class ProjectGitPullRequest(models.Model):
             for task_id in title_task_references
             if task_id not in referenced_tasks.ids
         ]
-        # The PR/MR is identified by its platform ids (no record to
-        # rely on: the PR/MR is usually not tracked)
+        # The PR/MR is identified by its platform ids, scoped by the
+        # instance (no record to rely on: the PR/MR is usually not tracked)
         id_repository, id_request = git_event._get_pr_identifiers(event)
+        instance_url = git_event._get_instance_url_from_event(event)
         platform_label = dict(
             self._fields["source"].get_description(self.env)["selection"]
         )[event.get("source")]
@@ -279,7 +287,7 @@ class ProjectGitPullRequest(models.Model):
             channel=channel.complete_name,
             description=job_description,
             identity_key=f"project_git.{warning_kind}:{event.get('source')}:"
-            f"{id_repository}:{id_request}",
+            f"{instance_url}:{id_repository}:{id_request}",
         )._post_message(message, event)
 
     def _post_message(self, message, event=None):

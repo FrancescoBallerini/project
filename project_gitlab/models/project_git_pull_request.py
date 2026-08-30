@@ -50,8 +50,8 @@ class ProjectGitPullRequest(models.Model):
 
         The event, when available, is the preferred source for the GitLab
         instance base URL (project.web_url is authoritative on any GitLab
-        version). Without an event the URL falls back to the record MR
-        URL, assuming the modern ``/-/merge_requests/`` layout.
+        version). Without an event the URL falls back to the record
+        instance URL, always set by the event flow.
         """
         if self:
             self.ensure_one()
@@ -59,7 +59,7 @@ class ProjectGitPullRequest(models.Model):
         else:
             project_id = event["project"]["id"]
             request_id = event["object_attributes"]["iid"]
-        web_url = event["project"]["web_url"] if event else self.url.split("/-/")[0]
+        web_url = event["project"]["web_url"] if event else self.instance_url
         gitlab_client = self.env["project.git.auth"]._connect_gitlab(url=web_url)
         try:
             project = gitlab_client.projects.get(project_id)

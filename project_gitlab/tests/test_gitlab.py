@@ -539,6 +539,44 @@ class TestGitlabMergeRequest(ProjectGitlabCase):
         self.assertFalse(foreign_pull_request.source)
         self.assertFalse(foreign_pull_request.task_ids)
 
+    def test_mr_same_ids_on_another_instance_creates_separate_record(self):
+        # Platform ids are unique only within one GitLab instance: a MR
+        # of another instance sharing (project id, MR iid) - plausible
+        # with the small sequential ids of self-hosted instances - must
+        # get its own record instead of being collapsed into the tracked
+        # one. The second repository is unmapped, so its MR matches
+        # through an explicit taskid# reference.
+        payload = self._mr_payload(title="GL-100 add new file")
+        other_root = "https://gitlab-other.example.com"
+        other_instance_payload = self._mr_payload(
+            title=f"Same ids elsewhere taskid#{self.gl_task_no_pattern.id}"
+        )
+        other_instance_payload["project"]["web_url"] = f"{other_root}/acme/demo-repo"
+        other_instance_payload["project"][
+            "git_http_url"
+        ] = f"{other_root}/acme/demo-repo.git"
+        other_instance_payload["object_attributes"][
+            "url"
+        ] = f"{other_root}/acme/demo-repo/-/merge_requests/1"
+        patcher, _merge_request = self._mock_gitlab_client()
+        with patcher:
+            self._dispatch(payload, "gitlab")
+            self._dispatch(other_instance_payload, "gitlab")
+
+        pull_request = self._get_pull_request(payload["object_attributes"]["url"])
+        other_pull_request = self._get_pull_request(
+            other_instance_payload["object_attributes"]["url"]
+        )
+        self.assertEqual(len(pull_request), 1)
+        self.assertEqual(len(other_pull_request), 1)
+        self.assertNotEqual(pull_request, other_pull_request)
+        self.assertEqual(pull_request.instance_url, "https://gitlab.example.com/")
+        self.assertEqual(other_pull_request.instance_url, f"{other_root}/")
+        # Each record keeps its own MR data and task links
+        self.assertEqual(pull_request.name, "GL-100 add new file")
+        self.assertEqual(pull_request.task_ids, self.gl_task_100)
+        self.assertEqual(other_pull_request.task_ids, self.gl_task_no_pattern)
+
     def test_mr_state_tags_are_assigned_to_task(self):
         payload = self._mr_payload(title="GL-100 add new file")
         patcher, _merge_request = self._mock_gitlab_client()
@@ -775,8 +813,8 @@ class TestGitlabMergeRequest(ProjectGitlabCase):
             jobs_trap.assert_jobs_count(0)
 
     def test_mr_negative_match_warning_is_posted_by_dedicated_job(self):
-        # The warning job is identified by the MR platform ids (the MR
-        # is not tracked) and the warning kind
+        # The warning job is identified by the MR platform ids, scoped
+        # by the instance (the MR is not tracked), and the warning kind
         payload = self._mr_payload(title="Generic title")
         patcher, merge_request = self._mock_gitlab_client()
         with patcher, trap_jobs() as jobs_trap:
@@ -788,8 +826,8 @@ class TestGitlabMergeRequest(ProjectGitlabCase):
             self.assertEqual(jobs_trap.enqueued_jobs[0].channel, "root.project_git")
             self.assertEqual(
                 jobs_trap.enqueued_jobs[0].identity_key,
-                f"project_git.no_reference:gitlab:{payload['project']['id']}:"
-                f"{payload['object_attributes']['iid']}",
+                "project_git.no_reference:gitlab:https://gitlab.example.com/:"
+                f"{payload['project']['id']}:{payload['object_attributes']['iid']}",
             )
             self.assertEqual(
                 jobs_trap.enqueued_jobs[0].description,
