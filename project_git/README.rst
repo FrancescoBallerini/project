@@ -85,6 +85,19 @@ processed asynchronously by its jobrunner, which must be active — add
 cannot run (e.g. Odoo.sh), also install ``queue_job_cron_jobrunner``
 (same repository) to process the jobs from a cron instead.
 
+All the jobs of the connector (event processing, PR/MR messages) run in
+the ``root.project_git`` channel. The platform libraries wait and retry
+on their own when the API is rate limited or in error, inside the
+running job: with the default jobrunner configuration (``root:1``) such
+a wait holds every job of the instance. To keep the connector jobs
+apart, give the channels their own capacity in the jobrunner
+configuration, e.g.
+``ODOO_QUEUE_JOB_CHANNELS=root:2,root.project_git:1`` (or
+``channels = root:2,root.project_git:1`` in the ``[queue_job]`` section
+of the Odoo configuration file): the other jobs keep a free slot while a
+connector job waits. A capacity of 1 on ``root.project_git`` is
+recommended: the events are then processed one at a time, in order.
+
 Configuration
 =============
 
@@ -447,6 +460,17 @@ references) connects one git hosting platform to this base. It provides:
    ``project.project`` (automatic webhook deployment) claiming its URLs
    in ``_get_url_platform`` with the same claim-or-``super()`` pattern
    as above.
+
+5. **Queue jobs**: every job of the connector runs in the
+   ``root.project_git`` channel: the ``project_git.channel_project_git``
+   record, returned by
+   ``project.git.utils._get_project_git_queue_job_channel()``, whose
+   ``complete_name`` is passed explicitly to ``with_delay()``, with no
+   ``queue.job.function`` record per method: the event handlers are
+   enqueued by the base controller, so a bridge gets it for free. Do the
+   same in any ``with_delay()`` call you add, so that the jobrunner
+   capacity configured for the connector (see the INSTALL section)
+   covers all its jobs.
 
 Known issues / Roadmap
 ======================

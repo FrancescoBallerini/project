@@ -452,6 +452,18 @@ processed asynchronously by its jobrunner, which must be active — add
 <tt class="docutils literal">queue_job</tt> documentation). On hostings where the standard jobrunner
 cannot run (e.g. Odoo.sh), also install <tt class="docutils literal">queue_job_cron_jobrunner</tt>
 (same repository) to process the jobs from a cron instead.</p>
+<p>All the jobs of the connector (event processing, PR/MR messages) run in
+the <tt class="docutils literal">root.project_git</tt> channel. The platform libraries wait and retry
+on their own when the API is rate limited or in error, inside the
+running job: with the default jobrunner configuration (<tt class="docutils literal">root:1</tt>) such
+a wait holds every job of the instance. To keep the connector jobs
+apart, give the channels their own capacity in the jobrunner
+configuration, e.g.
+<tt class="docutils literal">ODOO_QUEUE_JOB_CHANNELS=root:2,root.project_git:1</tt> (or
+<tt class="docutils literal">channels = root:2,root.project_git:1</tt> in the <tt class="docutils literal">[queue_job]</tt> section
+of the Odoo configuration file): the other jobs keep a free slot while a
+connector job waits. A capacity of 1 on <tt class="docutils literal">root.project_git</tt> is
+recommended: the events are then processed one at a time, in order.</p>
 </div>
 <div class="section" id="configuration">
 <h2><a class="toc-backref" href="#toc-entry-2">Configuration</a></h2>
@@ -818,6 +830,17 @@ tags of the other platforms must survive your alignment.</p>
 <tt class="docutils literal">project.project</tt> (automatic webhook deployment) claiming its URLs
 in <tt class="docutils literal">_get_url_platform</tt> with the same claim-or-<tt class="docutils literal">super()</tt> pattern
 as above.</p>
+</li>
+<li><p class="first"><strong>Queue jobs</strong>: every job of the connector runs in the
+<tt class="docutils literal">root.project_git</tt> channel: the <tt class="docutils literal">project_git.channel_project_git</tt>
+record, returned by
+<tt class="docutils literal">project.git.utils._get_project_git_queue_job_channel()</tt>, whose
+<tt class="docutils literal">complete_name</tt> is passed explicitly to <tt class="docutils literal">with_delay()</tt>, with no
+<tt class="docutils literal">queue.job.function</tt> record per method: the event handlers are
+enqueued by the base controller, so a bridge gets it for free. Do the
+same in any <tt class="docutils literal">with_delay()</tt> call you add, so that the jobrunner
+capacity configured for the connector (see the INSTALL section)
+covers all its jobs.</p>
 </li>
 </ol>
 </div>

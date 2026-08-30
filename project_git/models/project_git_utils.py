@@ -10,6 +10,9 @@ from odoo import api, models
 TASK_NAME_MATCH_REGEX = r"\b[A-Z][A-Z]+-\d+\b"
 TASK_ID_REFERENCE_REGEX = r"\b(?:task|t)id#(?P<id>\d+)\b"
 
+# queue.job.channel record of every job of the connector
+PROJECT_GIT_JOB_CHANNEL_XML_ID = "project_git.channel_project_git"
+
 # Platform API failures worth retrying later by the job (see
 # project.git.pull.request _post_message) once the platform library
 # gave up its own retries: HTTP statuses of rate limits and server
@@ -27,6 +30,11 @@ TRANSIENT_REQUEST_ERRORS = (
 class ProjectGitUtils(models.AbstractModel):
     _name = "project.git.utils"
     _description = "Project Git Webhook Utilities"
+
+    @api.model
+    def _get_project_git_queue_job_channel(self):
+        # sudo: the callers (webhook controller, jobs) run as the public user
+        return self.sudo().env.ref(PROJECT_GIT_JOB_CHANNEL_XML_ID)
 
     @api.model
     def _get_task_name_match_regex(self):

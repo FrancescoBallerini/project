@@ -77,7 +77,10 @@ class ProjectGitWebhook(http.Controller):
             # Event kinds the source bridge binds no handler for
             # (e.g. note events) are skipped silently.
             return True
-        return getattr(git_event.with_delay(), method_name)(event)
+        channel = request.env["project.git.utils"]._get_project_git_queue_job_channel()
+        return getattr(
+            git_event.with_delay(channel=channel.complete_name), method_name
+        )(event)
 
     def _detect_event_source(self, headers):
         """Recognize the source platform of a request from its headers.

@@ -9,3 +9,4 @@ from . import test_project_git_branch
 from . import test_project_git_commit
 from . import test_project_git_pull_request
 from . import test_project_task
+from . import test_queue_job

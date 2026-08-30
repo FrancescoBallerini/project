@@ -43,6 +43,7 @@ class TestGithubWebhookController(ProjectGitControllerCase):
         self.assertEqual(
             self._job_count("_process_commit_push_github"), jobs_before + 1
         )
+        self.assertEqual(self._last_job().channel, "root.project_git")
 
     def test_github_invalid_signature_is_rejected(self):
         jobs_before = self._job_count("_process_commit_push_github")

@@ -217,6 +217,9 @@ class TestGithubPullRequest(ProjectGithubCase):
                     for task in linked_tasks
                 },
             )
+            self.assertEqual(
+                {job.channel for job in jobs_trap.enqueued_jobs}, {"root.project_git"}
+            )
             self.assertEqual(pull_request.notified_task_ids, linked_tasks)
             pull.create_issue_comment.assert_not_called()
             jobs_trap.perform_enqueued_jobs()
@@ -236,6 +239,7 @@ class TestGithubPullRequest(ProjectGithubCase):
                 self._get_pull_request(payload["pull_request"]["html_url"])
             )
             jobs_trap.assert_jobs_count(1)
+            self.assertEqual(jobs_trap.enqueued_jobs[0].channel, "root.project_git")
             self.assertEqual(
                 jobs_trap.enqueued_jobs[0].identity_key,
                 f"project_git.no_reference:github:{payload['repository']['id']}:"

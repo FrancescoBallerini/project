@@ -36,6 +36,7 @@ class TestGitlabWebhookController(ProjectGitControllerCase):
         self.assertEqual(
             self._job_count("_process_commit_push_gitlab"), jobs_before + 1
         )
+        self.assertEqual(self._last_job().channel, "root.project_git")
 
     def test_insecure_default_token_rejects_requests(self):
         # The demo default "token" is publicly known: a webhook sending

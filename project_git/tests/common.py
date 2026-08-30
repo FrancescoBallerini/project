@@ -150,3 +150,7 @@ class ProjectGitControllerCase(PayloadCaseMixin, HttpCase):
         request enqueued nothing at all)."""
         domain = [("method_name", "=", method_name)] if method_name else []
         return self.env["queue.job"].sudo().search_count(domain)
+
+    def _last_job(self):
+        """Return the last enqueued queue job record."""
+        return self.env["queue.job"].sudo().search([], order="id desc", limit=1)

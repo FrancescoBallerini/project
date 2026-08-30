@@ -751,6 +751,9 @@ class TestGitlabMergeRequest(ProjectGitlabCase):
                     for task in linked_tasks
                 },
             )
+            self.assertEqual(
+                {job.channel for job in jobs_trap.enqueued_jobs}, {"root.project_git"}
+            )
             self.assertEqual(pull_request.notified_task_ids, linked_tasks)
             merge_request.discussions.create.assert_not_called()
             jobs_trap.perform_enqueued_jobs()
@@ -770,6 +773,7 @@ class TestGitlabMergeRequest(ProjectGitlabCase):
                 self._get_pull_request(payload["object_attributes"]["url"])
             )
             jobs_trap.assert_jobs_count(1)
+            self.assertEqual(jobs_trap.enqueued_jobs[0].channel, "root.project_git")
             self.assertEqual(
                 jobs_trap.enqueued_jobs[0].identity_key,
                 f"project_git.no_reference:gitlab:{payload['project']['id']}:"

@@ -100,3 +100,14 @@ connects one git hosting platform to this base. It provides:
    `project.project` (automatic webhook deployment) claiming its URLs
    in `_get_url_platform` with the same claim-or-`super()` pattern as
    above.
+
+5. **Queue jobs**: every job of the connector runs in the
+   `root.project_git` channel: the `project_git.channel_project_git`
+   record, returned by
+   `project.git.utils._get_project_git_queue_job_channel()`, whose
+   `complete_name` is passed explicitly to `with_delay()`, with no
+   `queue.job.function` record per method: the event handlers are
+   enqueued by the base controller, so a bridge gets it for free. Do
+   the same in any `with_delay()` call you add, so that the jobrunner
+   capacity configured for the connector (see the INSTALL section)
+   covers all its jobs.

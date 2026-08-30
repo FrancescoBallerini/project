@@ -139,6 +139,7 @@ class ProjectGitPullRequest(models.Model):
         platform_label = dict(
             self._fields["source"].get_description(self.env)["selection"]
         )[git_pull_request.source]
+        channel = self.env["project.git.utils"]._get_project_git_queue_job_channel()
         for task in tasks_to_notify:
             url = task._notify_get_action_link("view")
             message = _(
@@ -147,6 +148,7 @@ class ProjectGitPullRequest(models.Model):
                 url=url,
             )
             git_pull_request.with_delay(
+                channel=channel.complete_name,
                 description=_(
                     "%(platform)s: Post task #%(task_id)s link on "
                     "Request ID=%(id_request)s (Repo ID=%(id_project)s)",
@@ -242,6 +244,7 @@ class ProjectGitPullRequest(models.Model):
         platform_label = dict(
             self._fields["source"].get_description(self.env)["selection"]
         )[event.get("source")]
+        channel = self.env["project.git.utils"]._get_project_git_queue_job_channel()
         if missing_task_ids:
             # Broken explicit reference(s): "taskid#<id>" in the title
             # pointing to tasks that do not exist (prevails on the other warning)
@@ -275,6 +278,7 @@ class ProjectGitPullRequest(models.Model):
             # Nothing to warn: some task matched, or unrelated repository
             return
         self.with_delay(
+            channel=channel.complete_name,
             description=job_description,
             identity_key=f"project_git.{warning_kind}:{event.get('source')}:"
             f"{id_project}:{id_request}",
