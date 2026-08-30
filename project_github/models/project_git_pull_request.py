@@ -42,7 +42,7 @@ class ProjectGitPullRequest(models.Model):
         """
         if self:
             self.ensure_one()
-            repository_id, request_id = self.id_project, self.id_request
+            repository_id, request_id = self.id_repository, self.id_request
         else:
             repository_id = event["repository"]["id"]
             request_id = event["number"]

@@ -228,7 +228,7 @@ class ProjectGitEvent(models.Model):
 
         default_vals = {
             "id_request": event["object_attributes"]["iid"],
-            "id_project": event["project"]["id"],
+            "id_repository": event["project"]["id"],
             "source": "gitlab",
             "name": event["object_attributes"]["title"],
             "description": event["object_attributes"].get("description", ""),
@@ -250,5 +250,5 @@ class ProjectGitEvent(models.Model):
         return {**default_vals, **values_by_arg}
 
     def _get_pr_identifiers_gitlab(self, event):
-        """Return the (id_project, id_request) pair identifying the MR."""
+        """Return the (id_repository, id_request) pair identifying the MR."""
         return event["project"]["id"], event["object_attributes"]["iid"]

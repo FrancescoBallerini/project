@@ -19,7 +19,7 @@ class TestGitlabPullRequestModel(ProjectGitlabCase):
         pull_request_vals = {
             "name": "GitLab MR",
             "source": "gitlab",
-            "id_project": 1001,
+            "id_repository": 1001,
             "id_request": 1,
         }
         self.env["project.git.pull.request"].create(pull_request_vals)
@@ -42,7 +42,7 @@ class TestGitlabPullRequestModel(ProjectGitlabCase):
                 "source": "gitlab",
                 "url": f"{GITLAB_REPO_URL}/-/merge_requests/7",
                 "id_request": 7,
-                "id_project": 1001,
+                "id_repository": 1001,
                 "state": "opened",
             }
         )
@@ -65,7 +65,7 @@ class TestGitlabPullRequestModel(ProjectGitlabCase):
                 "source": "gitlab",
                 "url": f"{GITLAB_REPO_URL}/-/merge_requests/8",
                 "id_request": 8,
-                "id_project": 1001,
+                "id_repository": 1001,
                 "state": "opened",
             }
         )

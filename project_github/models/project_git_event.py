@@ -162,7 +162,7 @@ class ProjectGitEvent(models.Model):
 
         default_vals = {
             "id_request": event["number"],
-            "id_project": event["repository"]["id"],
+            "id_repository": event["repository"]["id"],
             "source": "github",
             "name": event["pull_request"]["title"],
             "description": event["pull_request"].get("body", ""),
@@ -178,5 +178,5 @@ class ProjectGitEvent(models.Model):
         return {**default_vals, **values_by_arg}
 
     def _get_pr_identifiers_github(self, event):
-        """Return the (id_project, id_request) pair identifying the PR."""
+        """Return the (id_repository, id_request) pair identifying the PR."""
         return event["repository"]["id"], event["number"]

@@ -20,9 +20,9 @@ class ProjectGitPullRequest(models.Model):
     id_request = fields.Integer(
         string="Request ID", help="Technical field used to track the merge request id"
     )
-    id_project = fields.Integer(
-        string="Project ID",
-        help="Technical field used to track the project id on the platform",
+    id_repository = fields.Integer(
+        string="Repository ID",
+        help="Technical field used to track the repository id on the platform",
     )
     # Each platform bridge adds its own value with selection_add
     source = fields.Selection([], string="Source Platform")
@@ -91,8 +91,8 @@ class ProjectGitPullRequest(models.Model):
 
     _sql_constraints = [
         (
-            "source_project_request_unique",
-            "unique(source, id_project, id_request)",
+            "source_repository_request_unique",
+            "unique(source, id_repository, id_request)",
             "A pull request with the same identifiers is already tracked"
             " for this platform.",
         )
@@ -151,11 +151,11 @@ class ProjectGitPullRequest(models.Model):
                 channel=channel.complete_name,
                 description=_(
                     "%(platform)s: Post task #%(task_id)s link on "
-                    "Request ID=%(id_request)s (Repo ID=%(id_project)s)",
+                    "Request ID=%(id_request)s (Repo ID=%(id_repository)s)",
                     platform=platform_label,
                     task_id=task.id,
                     id_request=git_pull_request.id_request,
-                    id_project=git_pull_request.id_project,
+                    id_repository=git_pull_request.id_repository,
                 ),
                 identity_key=f"project_git.task_link:{git_pull_request.id}:{task.id}",
             )._post_message(message, event)
@@ -238,7 +238,7 @@ class ProjectGitPullRequest(models.Model):
         ]
         # The PR/MR is identified by its platform ids (no record to
         # rely on: the PR/MR is usually not tracked)
-        id_project, id_request = git_event._get_pr_identifiers(event)
+        id_repository, id_request = git_event._get_pr_identifiers(event)
         platform_label = dict(
             self._fields["source"].get_description(self.env)["selection"]
         )[event.get("source")]
@@ -252,10 +252,10 @@ class ProjectGitPullRequest(models.Model):
             )
             job_description = _(
                 "%(platform)s: Post missing tasks warning on "
-                "Request ID=%(id_request)s (Repo ID=%(id_project)s)",
+                "Request ID=%(id_request)s (Repo ID=%(id_repository)s)",
                 platform=platform_label,
                 id_request=id_request,
-                id_project=id_project,
+                id_repository=id_repository,
             )
             warning_kind = "missing_tasks"
         elif not matching_tasks and repository_projects:
@@ -266,10 +266,10 @@ class ProjectGitPullRequest(models.Model):
             )
             job_description = _(
                 "%(platform)s: Post no reference warning on "
-                "Request ID=%(id_request)s (Repo ID=%(id_project)s)",
+                "Request ID=%(id_request)s (Repo ID=%(id_repository)s)",
                 platform=platform_label,
                 id_request=id_request,
-                id_project=id_project,
+                id_repository=id_repository,
             )
             warning_kind = "no_reference"
         else:
@@ -279,7 +279,7 @@ class ProjectGitPullRequest(models.Model):
             channel=channel.complete_name,
             description=job_description,
             identity_key=f"project_git.{warning_kind}:{event.get('source')}:"
-            f"{id_project}:{id_request}",
+            f"{id_repository}:{id_request}",
         )._post_message(message, event)
 
     def _post_message(self, message, event=None):

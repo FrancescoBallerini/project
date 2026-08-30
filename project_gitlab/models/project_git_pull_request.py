@@ -55,7 +55,7 @@ class ProjectGitPullRequest(models.Model):
         """
         if self:
             self.ensure_one()
-            project_id, request_id = self.id_project, self.id_request
+            project_id, request_id = self.id_repository, self.id_request
         else:
             project_id = event["project"]["id"]
             request_id = event["object_attributes"]["iid"]

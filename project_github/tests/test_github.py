@@ -254,7 +254,7 @@ class TestGithubPullRequest(ProjectGithubCase):
             pull.create_issue_comment.assert_called_once()
 
     def test_pr_does_not_reuse_pr_of_another_platform(self):
-        # (id_project, id_request) pairs are only unique per platform: a
+        # (id_repository, id_request) pairs are only unique per platform: a
         # PR of another platform sharing the identifiers must not be
         # picked up and overwritten by the PR event. The foreign PR is
         # simulated with an unset source, so the test does not depend on
@@ -263,7 +263,7 @@ class TestGithubPullRequest(ProjectGithubCase):
         foreign_pull_request = self.env["project.git.pull.request"].create(
             {
                 "name": "Same identifiers on another platform",
-                "id_project": payload["repository"]["id"],
+                "id_repository": payload["repository"]["id"],
                 "id_request": payload["number"],
                 "url": "https://other-platform.example.com/acme/demo-repo/-/merge_requests/2",
             }

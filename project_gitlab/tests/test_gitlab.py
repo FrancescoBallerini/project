@@ -509,7 +509,7 @@ class TestGitlabMergeRequest(ProjectGitlabCase):
         self.assertEqual(merge_request.discussions.create.call_count, 2)
 
     def test_mr_does_not_reuse_pr_of_another_platform(self):
-        # (id_project, id_request) pairs are only unique per platform: a
+        # (id_repository, id_request) pairs are only unique per platform: a
         # PR of another platform sharing the identifiers (plausible with
         # the small ids of a self-hosted GitLab) must not be picked up
         # and overwritten by the MR event. The foreign PR is simulated
@@ -519,7 +519,7 @@ class TestGitlabMergeRequest(ProjectGitlabCase):
         foreign_pull_request = self.env["project.git.pull.request"].create(
             {
                 "name": "Same identifiers on another platform",
-                "id_project": payload["project"]["id"],
+                "id_repository": payload["project"]["id"],
                 "id_request": payload["object_attributes"]["iid"],
                 "url": "https://other-platform.example.com/acme/demo-repo/pull/1",
             }
@@ -809,7 +809,7 @@ class TestGitlabPipeline(ProjectGitlabCase):
                 "name": "GL-100 add new file",
                 "url": f"{GITLAB_REPO_URL}/-/merge_requests/1",
                 "id_request": 1,
-                "id_project": 1001,
+                "id_repository": 1001,
                 "source": "gitlab",
                 "source_branch": "merge-req-branch",
                 "target_branch": "main",

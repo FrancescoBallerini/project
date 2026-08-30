@@ -19,7 +19,7 @@ class TestGithubPullRequestModel(ProjectGithubCase):
         pull_request_vals = {
             "name": "GitHub PR",
             "source": "github",
-            "id_project": 2002,
+            "id_repository": 2002,
             "id_request": 2,
         }
         self.env["project.git.pull.request"].create(pull_request_vals)
@@ -42,7 +42,7 @@ class TestGithubPullRequestModel(ProjectGithubCase):
                 "source": "github",
                 "url": f"{GITHUB_REPO_URL}/pull/8",
                 "id_request": 8,
-                "id_project": 2002,
+                "id_repository": 2002,
                 "state": "opened",
             }
         )

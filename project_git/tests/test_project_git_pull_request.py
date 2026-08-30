@@ -15,7 +15,7 @@ class TestProjectGitPullRequest(ProjectGitCase):
             self.env["project.git.pull.request"].create(
                 {
                     "name": "Sourceless PR with state",
-                    "id_project": 7,
+                    "id_repository": 7,
                     "id_request": 7,
                     "state": "opened",
                     "task_ids": [(4, self.gl_task_100.id)],
@@ -30,13 +30,13 @@ class TestProjectGitPullRequest(ProjectGitCase):
         )
 
     def test_pull_requests_without_source_do_not_collide(self):
-        # The uniqueness of (source, id_project, id_request) only binds
+        # The uniqueness of (source, id_repository, id_request) only binds
         # records of the same platform: records without a source (e.g.
         # created by hand) never collide with each other (NULLs are
         # distinct for the constraint). The collision case needs a real
         # source value, so it is covered by the bridge suites.
         for name in ("First sourceless PR", "Second sourceless PR"):
             self.env["project.git.pull.request"].create(
-                {"name": name, "id_project": 1, "id_request": 1}
+                {"name": name, "id_repository": 1, "id_request": 1}
             )
         self.env.flush_all()

@@ -222,7 +222,7 @@ class ProjectGitEvent(models.Model):
         (identifiers are only unique per platform).
 
         :param dict event: The webhook event
-        :return: (id_project, id_request) tuple (None if the source
+        :return: (id_repository, id_request) tuple (None if the source
             implements no hook)
         """
         return self._dispatch_by_source(event, "_get_pr_identifiers")
@@ -640,13 +640,13 @@ class ProjectGitEvent(models.Model):
     @api.model
     def _search_existing_pull_request(self, event):
         """Search for an existing pr of the same platform by
-        id_request/id_project (identifiers are only unique per platform)
+        id_request/id_repository (identifiers are only unique per platform)
         :param dict event: git event
         :return: existing pull request or empty recordset"""
         pr_identifiers = self._get_pr_identifiers(event)
         if not pr_identifiers:
             return self.env["project.git.pull.request"]
-        project_id, request_id = pr_identifiers
+        repository_id, request_id = pr_identifiers
 
         return (
             self.env["project.git.pull.request"]
@@ -655,7 +655,7 @@ class ProjectGitEvent(models.Model):
                 [
                     ("source", "=", event.get("source")),
                     ("id_request", "=", request_id),
-                    ("id_project", "=", project_id),
+                    ("id_repository", "=", repository_id),
                 ],
                 limit=1,
             )

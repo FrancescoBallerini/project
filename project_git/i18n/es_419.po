@@ -49,7 +49,7 @@ msgid "A commit with the same SHA is already tracked."
 msgstr ""
 
 #. module: project_git
-#: model:ir.model.constraint,message:project_git.constraint_project_git_pull_request_source_project_request_unique
+#: model:ir.model.constraint,message:project_git.constraint_project_git_pull_request_source_repository_request_unique
 msgid ""
 "A pull request with the same identifiers is already tracked for this "
 "platform."
@@ -309,9 +309,9 @@ msgid "Project Git Webhook Utilities"
 msgstr ""
 
 #. module: project_git
-#: model:ir.model.fields,field_description:project_git.field_project_git_pull_request__id_project
-msgid "Project ID"
-msgstr "ID de proyecto"
+#: model:ir.model.fields,field_description:project_git.field_project_git_pull_request__id_repository
+msgid "Repository ID"
+msgstr "ID de repositorio"
 
 #. module: project_git
 #: model:ir.actions.act_window,name:project_git.action_project_git_pull_request
@@ -410,9 +410,9 @@ msgid "Technical field used to track the merge request id"
 msgstr "Campo técnico utilizado para rastrear el ID de solicitud de mezcla"
 
 #. module: project_git
-#: model:ir.model.fields,help:project_git.field_project_git_pull_request__id_project
-msgid "Technical field used to track the project id on the platform"
-msgstr "Campo técnico utilizado para rastrear la identificación del proyecto en la plataforma"
+#: model:ir.model.fields,help:project_git.field_project_git_pull_request__id_repository
+msgid "Technical field used to track the repository id on the platform"
+msgstr "Campo técnico utilizado para rastrear la identificación del repositorio en la plataforma"
 
 #. module: project_git
 #. odoo-python
