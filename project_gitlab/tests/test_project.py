@@ -7,6 +7,7 @@ from gitlab.exceptions import GitlabJobRetryError
 
 from odoo.exceptions import UserError
 
+from odoo.addons.project_git.tests.common import GITLAB_INSTANCE_ROOT
 from odoo.addons.project_gitlab.models.project_git_auth import ProjectGitAuth
 from odoo.addons.project_gitlab.models.project_project import ProjectProject
 
@@ -24,7 +25,10 @@ class TestProjectWebhookDeploy(ProjectGitlabCase):
         super().setUp()
         config = self.env["ir.config_parameter"].sudo()
         config.set_param("web.base.url", ODOO_BASE_URL)
-        config.set_param("project_git.authorization_token", WEBHOOK_TOKEN)
+        # The deploy reads the per-instance secret of the repo instance root
+        config.set_param(
+            f"project_gitlab.webhook_secret.{GITLAB_INSTANCE_ROOT}", WEBHOOK_TOKEN
+        )
         self.expected_hook_url = f"{ODOO_BASE_URL}/project_git/webhook/"
 
     def _mock_gitlab_for_project(self, hooks=(), jobs=()):

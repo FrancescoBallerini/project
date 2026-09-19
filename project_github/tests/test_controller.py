@@ -45,6 +45,20 @@ class TestGithubWebhookController(ProjectGitControllerCase):
         )
         self.assertEqual(self._last_job().channel, "root.project_git")
 
+    def test_missing_secret_param_rejects_requests(self):
+        self.config.set_param("project_github.webhook_secret", False)
+        payload = self._load_payload("github_push.json")
+        jobs_before = self._job_count("_process_commit_push_github")
+        result = self._post_webhook(
+            payload,
+            headers={
+                "X-GitHub-Event": "push",
+                "X-Hub-Signature-256": self._github_signature(payload),
+            },
+        )
+        self.assertIs(result, False)
+        self.assertEqual(self._job_count("_process_commit_push_github"), jobs_before)
+
     def test_github_invalid_signature_is_rejected(self):
         jobs_before = self._job_count("_process_commit_push_github")
         result = self._post_webhook(

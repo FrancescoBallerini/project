@@ -6,9 +6,10 @@ below or in the platform bridge documentation:
 1. **Install the platform bridge** of your platform (`project_github`,
    `project_gitlab`, or both): this base module alone processes no
    event.
-2. **Set the shared webhook secret** in the
-   `project_git.authorization_token` system parameter: incoming
-   webhook requests are authorized against it.
+2. **Set the webhook secret** system parameter of the bridge
+   (`project_github.webhook_secret` /
+   `project_gitlab.webhook_secret.<instance-url>/`): incoming webhook
+   requests are authorized against it.
 3. **Set the platform API token** system parameter of the bridge
    (`project_github.token` / `project_gitlab.token.<instance-url>/`):
    it lets Odoo call the platform API.
@@ -40,19 +41,22 @@ mapped (see below) and the system parameters are set, the **Create
 Webhooks** button on the Odoo project form (**Project > Configuration >
 Projects**, open the project) creates the webhook on the repository
 through the platform bridge. Deploying again replaces the webhook, so
-the button can be reused after changing the Odoo base URL or the token.
+the button can be reused after changing the Odoo base URL or the secret.
 
 ## System parameters
 
-With the developer mode activated, go to **Settings > Technical >
-Parameters > System Parameters** and set:
+The credentials are configured on the bridge modules (see their
+documentation), with the developer mode activated, in **Settings >
+Technical > Parameters > System Parameters**:
 
-- `project_git.authorization_token`: the secret token set on the
-  webhooks. Incoming requests are rejected when this parameter is
-  missing or still set to the demo default.
-
-The API tokens used by Odoo to call the platforms are configured on the
-bridge modules (see their documentation).
+- the **webhook secret** of each platform
+  (`project_github.webhook_secret` /
+  `project_gitlab.webhook_secret.<instance-url>/`): the secret token
+  set on the webhooks. Incoming requests are rejected when the
+  parameter of their platform is missing or still set to the demo
+  default.
+- the **API token** used by Odoo to call the platform
+  (`project_github.token` / `project_gitlab.token.<instance-url>/`).
 
 ## Project mapping
 

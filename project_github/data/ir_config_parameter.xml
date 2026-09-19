@@ -4,4 +4,8 @@
         <field name="key">project_github.token</field>
         <field name="value">token</field>
     </record>
+    <record id="github_webhook_secret" model="ir.config_parameter">
+        <field name="key">project_github.webhook_secret</field>
+        <field name="value">token</field>
+    </record>
 </odoo>

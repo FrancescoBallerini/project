@@ -18,12 +18,14 @@ class ProjectProject(models.Model):
         return super()._get_url_platform(project_url) or "gitlab"
 
     def _create_project_webhook_gitlab(self, project_url):
-        gl = self.env["project.git.auth"]._connect_gitlab(url=project_url)
+        git_auth = self.env["project.git.auth"]
+        gl = git_auth._connect_gitlab(url=project_url)
         gitlab_project = gl.projects.get(self._git_project_path(project_url))
         odoo_url = self._get_webhook_url()
         for hook in gitlab_project.hooks.list():
             if hook.url == odoo_url:
                 hook.delete()
+        instance_root = git_auth._get_gitlab_instance_root(project_url)
         gitlab_project.hooks.create(
             {
                 "url": odoo_url,
@@ -33,7 +35,7 @@ class ProjectProject(models.Model):
                 "enable_ssl_verification": True,
                 "token": self.env["ir.config_parameter"]
                 .sudo()
-                .get_param("project_git.authorization_token"),
+                .get_param("project_gitlab.webhook_secret." + instance_root),
             }
         )
 

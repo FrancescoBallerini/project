@@ -410,9 +410,16 @@ pip install PyGithub
 <h2><a class="toc-backref" href="#toc-entry-2">Configuration</a></h2>
 <p>Connect your GitHub repositories, step by step:</p>
 <ol class="arabic">
-<li><p class="first"><strong>Configure the base module first</strong>: webhook endpoint, shared
-authorization token and project mapping are documented in
-<tt class="docutils literal">project_git</tt>.</p>
+<li><p class="first"><strong>Configure the base module first</strong>: webhook endpoint and project
+mapping are documented in <tt class="docutils literal">project_git</tt>.</p>
+</li>
+<li><p class="first"><strong>Set the ``project_github.webhook_secret`` system parameter</strong> to the
+secret shared with the GitHub webhooks; in Odoo, with the developer
+mode activated, set the parameter from <strong>Settings &gt; Technical &gt;
+Parameters &gt; System Parameters</strong>. GitHub signs every webhook payload
+with this secret (<tt class="docutils literal"><span class="pre">X-Hub-Signature-256</span></tt> header) and the module
+verifies the signature; requests are rejected when the parameter is
+missing or still set to the demo default.</p>
 </li>
 <li><p class="first"><strong>Set the ``project_github.token`` system parameter</strong> to a GitHub
 personal access token (classic or fine-grained). Create the token on
@@ -436,9 +443,8 @@ consider a token dedicated to this integration.</p>
 project form (<strong>Project &gt; Configuration &gt; Projects</strong>, open the
 project; to configure it by hand instead, use the repository page on
 GitHub, <strong>Settings &gt; Webhooks</strong>). The webhook is subscribed to push
-and pull request events and uses the authorization token as HMAC
-secret: GitHub signs every payload with it (<tt class="docutils literal"><span class="pre">X-Hub-Signature-256</span></tt>
-header) and the module verifies the signature.</p>
+and pull request events and uses <tt class="docutils literal">project_github.webhook_secret</tt> as
+HMAC secret.</p>
 </li>
 <li><p class="first"><strong>Optionally, map GitHub users to Odoo users</strong>: go to <strong>Settings &gt;
 Users &amp; Companies &gt; Users</strong>, open the user and fill the <strong>Github

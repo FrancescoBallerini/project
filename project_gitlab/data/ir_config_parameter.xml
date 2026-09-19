@@ -4,4 +4,10 @@
         <field name="key">project_gitlab.token.https://gitlab.example.com/</field>
         <field name="value">token</field>
     </record>
+    <record id="gitlab_webhook_secret" model="ir.config_parameter">
+        <field
+            name="key"
+        >project_gitlab.webhook_secret.https://gitlab.example.com/</field>
+        <field name="value">token</field>
+    </record>
 </odoo>

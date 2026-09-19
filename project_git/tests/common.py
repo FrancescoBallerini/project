@@ -7,6 +7,7 @@ import os
 from odoo.tests.common import HttpCase, TransactionCase
 
 GITLAB_REPO_URL = "https://gitlab.example.com/acme/demo-repo"
+GITLAB_INSTANCE_ROOT = "https://gitlab.example.com/"
 GITHUB_REPO_URL = "https://github.example.com/acme/webhook-demo"
 NULL_SHA = "0" * 40
 
@@ -127,7 +128,12 @@ class ProjectGitControllerCase(PayloadCaseMixin, HttpCase):
     def setUp(self):
         super().setUp()
         self.config = self.env["ir.config_parameter"].sudo()
-        self.config.set_param("project_git.authorization_token", TEST_TOKEN)
+        # One webhook secret per platform; the GitLab one is keyed by
+        # the instance root the fixture repos live on
+        self.config.set_param("project_github.webhook_secret", TEST_TOKEN)
+        self.config.set_param(
+            f"project_gitlab.webhook_secret.{GITLAB_INSTANCE_ROOT}", TEST_TOKEN
+        )
 
     def _post_webhook(self, payload, headers=None):
         """POST the payload to the webhook route and return the JSON-RPC

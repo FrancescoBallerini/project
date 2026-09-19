@@ -8,24 +8,15 @@ from .common import ProjectGitControllerCase
 
 @tagged("post_install", "-at_install")
 class TestWebhookController(ProjectGitControllerCase):
-    """Platform-agnostic authorization layers: requests that no platform
-    claims and requests arriving without a configured token. The
-    platform-specific verifications (GitLab token, GitHub signature) are
-    covered by the bridge test suites."""
+    """Platform-agnostic authorization layer: requests that no platform
+    claims. The platform-specific layers (secret lookup, GitLab token
+    and GitHub signature verification) are covered by the bridge test
+    suites."""
 
     def test_request_without_auth_headers_is_rejected(self):
         # No platform header claims the request: the source stays
         # unrecognized and the request is rejected even with a valid
-        # token configured
-        jobs_before = self._job_count()
-        result = self._post_webhook({"object_kind": "push"})
-        self.assertIs(result, False)
-        self.assertEqual(self._job_count(), jobs_before)
-
-    def test_missing_token_param_rejects_requests(self):
-        # Without a configured authorization token every request is
-        # rejected before any source detection
-        self.config.set_param("project_git.authorization_token", False)
+        # secret configured
         jobs_before = self._job_count()
         result = self._post_webhook({"object_kind": "push"})
         self.assertIs(result, False)

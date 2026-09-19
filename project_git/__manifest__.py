@@ -19,7 +19,6 @@
     ],
     "data": [
         "data/message_templates.xml",
-        "data/ir_config_parameter.xml",
         "data/queue_job_channel.xml",
         "views/project_git_branch_view.xml",
         "views/project_git_commit_view.xml",
