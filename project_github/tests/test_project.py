@@ -23,7 +23,7 @@ class TestProjectWebhookDeploy(ProjectGithubCase):
         super().setUp()
         config = self.env["ir.config_parameter"].sudo()
         config.set_param("web.base.url", ODOO_BASE_URL)
-        config.set_param("project_git.authorization_token", WEBHOOK_TOKEN)
+        config.set_param("project_github.webhook_secret", WEBHOOK_TOKEN)
         self.expected_hook_url = f"{ODOO_BASE_URL}/project_git/webhook/"
         self.githubcom_project = self.env["project.project"].create(
             {"name": "GitHub.com Repo", "git_project_url": GITHUB_COM_REPO_URL}

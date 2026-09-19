@@ -63,11 +63,18 @@ Configuration
 
 Connect your GitHub repositories, step by step:
 
-1. **Configure the base module first**: webhook endpoint, shared
-   authorization token and project mapping are documented in
-   ``project_git``.
+1. **Configure the base module first**: webhook endpoint and project
+   mapping are documented in ``project_git``.
 
-2. **Set the ``project_github.token`` system parameter** to a GitHub
+2. **Set the ``project_github.webhook_secret`` system parameter** to the
+   secret shared with the GitHub webhooks; in Odoo, with the developer
+   mode activated, set the parameter from **Settings > Technical >
+   Parameters > System Parameters**. GitHub signs every webhook payload
+   with this secret (``X-Hub-Signature-256`` header) and the module
+   verifies the signature; requests are rejected when the parameter is
+   missing or still set to the demo default.
+
+3. **Set the ``project_github.token`` system parameter** to a GitHub
    personal access token (classic or fine-grained). Create the token on
    GitHub from your avatar menu, **Settings > Developer settings >
    Personal access tokens**; in Odoo, with the developer mode activated,
@@ -88,15 +95,14 @@ Connect your GitHub repositories, step by step:
    comfortably serves a normal activity, but with a high event volume
    consider a token dedicated to this integration.
 
-3. **Deploy the webhook** with the **Create Webhooks** button on the
+4. **Deploy the webhook** with the **Create Webhooks** button on the
    project form (**Project > Configuration > Projects**, open the
    project; to configure it by hand instead, use the repository page on
    GitHub, **Settings > Webhooks**). The webhook is subscribed to push
-   and pull request events and uses the authorization token as HMAC
-   secret: GitHub signs every payload with it (``X-Hub-Signature-256``
-   header) and the module verifies the signature.
+   and pull request events and uses ``project_github.webhook_secret`` as
+   HMAC secret.
 
-4. **Optionally, map GitHub users to Odoo users**: go to **Settings >
+5. **Optionally, map GitHub users to Odoo users**: go to **Settings >
    Users & Companies > Users**, open the user and fill the **Github
    Username** field with their GitHub login. The author of each pull
    request is matched against this field and shown on the PR record as

@@ -45,8 +45,11 @@ class ProjectGitCase(PayloadCaseMixin, TransactionCase):
     handlers and state transitions, matching and configuration edge cases.
 
     The project/task fixtures cover both platforms regardless of the
-    installed bridges: they are plain neutral data, shared so that the
-    bridge suites stay symmetric.
+    installed bridges: they are plain neutral data with no dependency
+    on the bridge modules (the platform names are only mnemonics for
+    the suites using them). They live in the base because its own
+    matching tests need two mapped repositories anyway, and sharing
+    them keeps the bridge suites symmetric.
     """
 
     @classmethod
@@ -126,8 +129,9 @@ class ProjectGitControllerCase(PayloadCaseMixin, HttpCase):
 
     def setUp(self):
         super().setUp()
+        # The webhook secrets are per-platform parameters: each bridge
+        # controller suite configures its own in setUp
         self.config = self.env["ir.config_parameter"].sudo()
-        self.config.set_param("project_git.authorization_token", TEST_TOKEN)
 
     def _post_webhook(self, payload, headers=None):
         """POST the payload to the webhook route and return the JSON-RPC

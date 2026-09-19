@@ -34,7 +34,7 @@ class ProjectProject(models.Model):
                 "content_type": "json",
                 "secret": self.env["ir.config_parameter"]
                 .sudo()
-                .get_param("project_git.authorization_token"),
+                .get_param("project_github.webhook_secret"),
                 "insecure_ssl": "0",
             },
             events=["push", "pull_request"],

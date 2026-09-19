@@ -17,6 +17,17 @@ class ProjectGithubWebhook(ProjectGitWebhook):
             return "github"
         return super()._detect_event_source(headers)
 
+    def _get_webhook_secret_github(self):
+        """Return the configured GitHub webhook secret: a single
+        parameter, as the bridge supports github.com only (self-hosted
+        instances, and per-instance secret keys, are not supported
+        yet)."""
+        return (
+            request.env["ir.config_parameter"]
+            .sudo()
+            .get_param("project_github.webhook_secret")
+        )
+
     def _verify_webhook_token_github(self, token):
         """GitHub signs the request body with the webhook secret
         (HMAC-SHA256) instead of sending the secret itself."""

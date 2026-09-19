@@ -15,7 +15,16 @@ from odoo.addons.project_gitlab.controllers.main import ProjectGitlabWebhook
 from odoo.addons.project_gitlab.models.project_git_auth import ProjectGitAuth
 from odoo.addons.queue_job.tests.common import trap_jobs
 
-__all__ = ["GITLAB_REPO_URL", "NULL_SHA", "ProjectGitlabCase"]
+__all__ = [
+    "GITLAB_INSTANCE_ROOT",
+    "GITLAB_REPO_URL",
+    "NULL_SHA",
+    "ProjectGitlabCase",
+]
+
+# Root of the GitLab instance hosting the fixture repos: the key
+# fragment of the per-instance system parameters (secret, API token)
+GITLAB_INSTANCE_ROOT = "https://gitlab.example.com/"
 
 
 class ProjectGitlabCase(ProjectGitCase):

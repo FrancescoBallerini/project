@@ -17,34 +17,35 @@ def token_authorization(function):
     """Decorator for controllers with token authorization.
 
     The event source is recognized from the request headers
-    (_detect_event_source), then the request is authorized by the
-    source-specific _verify_webhook_token_<source> method. Requests from
-    unrecognized sources or with an invalid token get an unsuccessful
-    response.
+    (_detect_event_source), the webhook secret of that platform is read
+    by the source-specific _get_webhook_secret_<source> hook, then the
+    request is authorized against it by the source-specific
+    _verify_webhook_token_<source> method. Requests from unrecognized
+    sources, without a configured secret or with an invalid token get
+    an unsuccessful response.
     """
 
     @functools.wraps(function)
     def wrapper(self, *args, **kw):
-        token = (
-            request.env["ir.config_parameter"]
-            .sudo()
-            .get_param("project_git.authorization_token")
-        )
-        if not token or token in BANNED_TOKENS:
-            _logger.warning(
-                "project_git.authorization_token is not configured "
-                "(or still set to an insecure default)"
-            )
-            return False
         source = self._detect_event_source(request.httprequest.headers)
         if not source:
             _logger.warning(
                 "Unrecognized webhook source (no platform header claims the request)"
             )
             return False
+        secret = False
+        if hasattr(self, f"_get_webhook_secret_{source}"):
+            secret = getattr(self, f"_get_webhook_secret_{source}")()
+        if not secret or secret in BANNED_TOKENS:
+            _logger.warning(
+                "The webhook secret for source %r is not configured "
+                "(or still set to an insecure default)",
+                source,
+            )
+            return False
         authorization = False
         if hasattr(self, f"_verify_webhook_token_{source}"):
-            authorization = getattr(self, f"_verify_webhook_token_{source}")(token)
+            authorization = getattr(self, f"_verify_webhook_token_{source}")(secret)
         if not authorization:
             _logger.warning("Token is not the expected for source %r", source)
             return False
