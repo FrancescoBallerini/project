@@ -7,6 +7,8 @@ from gitlab.exceptions import GitlabJobRetryError
 from odoo import _, api, models
 from odoo.exceptions import UserError
 
+from .project_git_auth import SIGNING_SECRET_PREFIX
+
 
 class ProjectProject(models.Model):
     _inherit = "project.project"
@@ -26,6 +28,18 @@ class ProjectProject(models.Model):
             if hook.url == odoo_url:
                 hook.delete()
         instance_root = git_auth._get_gitlab_instance_root(project_url)
+        webhook_secret = (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param("project_gitlab.webhook_secret." + instance_root)
+        )
+        # The secret format selects the hook attribute: a signing
+        # token (whsec_, GitLab >= 19.1) or the legacy plain secret
+        secret_attribute = (
+            "signing_token"
+            if webhook_secret and webhook_secret.startswith(SIGNING_SECRET_PREFIX)
+            else "token"
+        )
         gitlab_project.hooks.create(
             {
                 "url": odoo_url,
@@ -33,9 +47,7 @@ class ProjectProject(models.Model):
                 "merge_requests_events": True,
                 "pipeline_events": True,
                 "enable_ssl_verification": True,
-                "token": self.env["ir.config_parameter"]
-                .sudo()
-                .get_param("project_gitlab.webhook_secret." + instance_root),
+                secret_attribute: webhook_secret,
             }
         )
 

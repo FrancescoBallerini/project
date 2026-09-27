@@ -2,6 +2,7 @@
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl.html).
 
 import os
+from base64 import b64encode
 from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -12,19 +13,32 @@ from odoo.addons.project_git.tests.common import (
     ProjectGitCase,
 )
 from odoo.addons.project_gitlab.controllers.main import ProjectGitlabWebhook
-from odoo.addons.project_gitlab.models.project_git_auth import ProjectGitAuth
+from odoo.addons.project_gitlab.models.project_git_auth import (
+    SIGNING_SECRET_PREFIX,
+    ProjectGitAuth,
+)
 from odoo.addons.queue_job.tests.common import trap_jobs
 
 __all__ = [
     "GITLAB_INSTANCE_ROOT",
     "GITLAB_REPO_URL",
     "NULL_SHA",
+    "TEST_SIGNING_SECRET",
     "ProjectGitlabCase",
 ]
 
 # Root of the GitLab instance hosting the fixture repos: the key
 # fragment of the per-instance system parameters (secret, API token)
 GITLAB_INSTANCE_ROOT = "https://gitlab.example.com/"
+
+# Standard Webhooks signing token for the tests: whsec_ prefix +
+# base64 of a 32-byte key. Built by concatenation on purpose: a
+# whsec_<base64> literal in the source trips the GitHub secret
+# scanning (it matches the Stripe signing secret pattern), flooding
+# the repository owners with leaked-secret alert emails.
+TEST_SIGNING_SECRET = (
+    SIGNING_SECRET_PREFIX + b64encode(b"unit-test-signing-key-32-bytes!!").decode()
+)
 
 
 class ProjectGitlabCase(ProjectGitCase):

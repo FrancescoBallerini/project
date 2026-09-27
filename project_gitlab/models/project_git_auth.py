@@ -8,6 +8,13 @@ import gitlab  # pylint: disable=W7935
 
 from odoo import api, models
 
+# Prefix of the GitLab webhook signing tokens (Standard Webhooks
+# secret format, GitLab >= 19.1): a webhook_secret sysparam value
+# carrying it selects the signature verification and the signing_token
+# hook attribute; any other value is treated as a legacy plain-text
+# secret token.
+SIGNING_SECRET_PREFIX = "whsec_"
+
 
 class ProjectGitAuth(models.AbstractModel):
     _inherit = "project.git.auth"

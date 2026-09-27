@@ -422,12 +422,23 @@ webhooks of that instance; in Odoo, with the developer mode
 activated, set the parameter from <strong>Settings &gt; Technical &gt; Parameters
 &gt; System Parameters</strong>. The key is the instance root URL <strong>with a
 trailing slash</strong>, e.g.
-<tt class="docutils literal"><span class="pre">project_gitlab.webhook_secret.https://gitlab.com/</span></tt>. Webhook
-requests carry the secret verbatim in the <tt class="docutils literal"><span class="pre">X-Gitlab-Token</span></tt> header,
-and the sending instance (<tt class="docutils literal"><span class="pre">X-Gitlab-Instance</span></tt> header; on GitLab
-older than 15.5, the project URL in the payload) selects the secret
-they are verified against: requests are rejected when the parameter
-of their instance is missing or still set to the demo default.</p>
+<tt class="docutils literal"><span class="pre">project_gitlab.webhook_secret.https://gitlab.com/</span></tt>. The sending
+instance (<tt class="docutils literal"><span class="pre">X-Gitlab-Instance</span></tt> header; on GitLab older than 15.5,
+the project URL in the payload) selects the secret the requests are
+verified against: requests are rejected when the parameter of their
+instance is missing or still set to the demo default.</p>
+<p>The format of the value selects the verification mechanism:</p>
+<ul class="simple">
+<li>a <strong>signing token</strong> (GitLab 19.1 and later, recommended): a
+<tt class="docutils literal">whsec_&lt;base64&gt;</tt> value encoding a 32-byte key, like the ones
+GitLab generates in the webhook form. The secret never travels:
+GitLab signs every delivery with it (HMAC-SHA256 per the Standard
+Webhooks specification) and deliveries with a stale signed
+timestamp are rejected (replay protection);</li>
+<li>a <strong>plain secret token</strong> (any GitLab version): any other value.
+GitLab sends it verbatim in the <tt class="docutils literal"><span class="pre">X-Gitlab-Token</span></tt> header of every
+delivery, and it is compared with the parameter.</li>
+</ul>
 </li>
 <li><p class="first"><strong>Set one ``project_gitlab.token.&lt;instance-url&gt;/`` system parameter
 per GitLab instance</strong> to a GitLab access token. Create the token on
@@ -450,7 +461,8 @@ project; to configure it by hand instead, use the project page on
 GitLab, <strong>Settings &gt; Webhooks</strong>). The webhook is subscribed to push,
 merge request and pipeline events and uses the
 <tt class="docutils literal"><span class="pre">project_gitlab.webhook_secret.&lt;instance-url&gt;/</span></tt> parameter of the
-repository instance as secret token.</p>
+repository instance as secret: a <tt class="docutils literal">whsec_</tt> value is installed on the
+hook as its signing token, any other value as its plain secret token.</p>
 </li>
 <li><p class="first"><strong>Optionally, map GitLab users to Odoo users</strong>: go to <strong>Settings &gt;
 Users &amp; Companies &gt; Users</strong>, open the user and fill the <strong>Gitlab

@@ -10,7 +10,12 @@ from odoo.exceptions import UserError
 from odoo.addons.project_gitlab.models.project_git_auth import ProjectGitAuth
 from odoo.addons.project_gitlab.models.project_project import ProjectProject
 
-from .common import GITLAB_INSTANCE_ROOT, GITLAB_REPO_URL, ProjectGitlabCase
+from .common import (
+    GITLAB_INSTANCE_ROOT,
+    GITLAB_REPO_URL,
+    TEST_SIGNING_SECRET,
+    ProjectGitlabCase,
+)
 
 ODOO_BASE_URL = "https://odoo.example.com"
 WEBHOOK_TOKEN = "webhook-secret-token"
@@ -72,6 +77,20 @@ class TestProjectWebhookDeploy(ProjectGitlabCase):
                 "token": WEBHOOK_TOKEN,
             }
         )
+
+    def test_create_webhook_with_signing_secret(self):
+        # A whsec_ secret is installed as the signing_token attribute
+        # of the hook instead of the legacy plain token
+        self.env["ir.config_parameter"].sudo().set_param(
+            f"project_gitlab.webhook_secret.{GITLAB_INSTANCE_ROOT}",
+            TEST_SIGNING_SECRET,
+        )
+        patcher, client = self._mock_gitlab_for_project()
+        with patcher:
+            self.gitlab_project.create_project_webhook()
+        hook_vals = client.projects.get.return_value.hooks.create.call_args.args[0]
+        self.assertEqual(hook_vals["signing_token"], TEST_SIGNING_SECRET)
+        self.assertNotIn("token", hook_vals)
 
     def test_create_webhook_replaces_existing_hook(self):
         stale_hook = self._hook_stub(self.expected_hook_url)

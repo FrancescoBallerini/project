@@ -75,12 +75,23 @@ Connect your GitLab repositories, step by step:
    activated, set the parameter from **Settings > Technical > Parameters
    > System Parameters**. The key is the instance root URL **with a
    trailing slash**, e.g.
-   ``project_gitlab.webhook_secret.https://gitlab.com/``. Webhook
-   requests carry the secret verbatim in the ``X-Gitlab-Token`` header,
-   and the sending instance (``X-Gitlab-Instance`` header; on GitLab
-   older than 15.5, the project URL in the payload) selects the secret
-   they are verified against: requests are rejected when the parameter
-   of their instance is missing or still set to the demo default.
+   ``project_gitlab.webhook_secret.https://gitlab.com/``. The sending
+   instance (``X-Gitlab-Instance`` header; on GitLab older than 15.5,
+   the project URL in the payload) selects the secret the requests are
+   verified against: requests are rejected when the parameter of their
+   instance is missing or still set to the demo default.
+
+   The format of the value selects the verification mechanism:
+
+   - a **signing token** (GitLab 19.1 and later, recommended): a
+     ``whsec_<base64>`` value encoding a 32-byte key, like the ones
+     GitLab generates in the webhook form. The secret never travels:
+     GitLab signs every delivery with it (HMAC-SHA256 per the Standard
+     Webhooks specification) and deliveries with a stale signed
+     timestamp are rejected (replay protection);
+   - a **plain secret token** (any GitLab version): any other value.
+     GitLab sends it verbatim in the ``X-Gitlab-Token`` header of every
+     delivery, and it is compared with the parameter.
 
 3. **Set one ``project_gitlab.token.<instance-url>/`` system parameter
    per GitLab instance** to a GitLab access token. Create the token on
@@ -105,7 +116,8 @@ Connect your GitLab repositories, step by step:
    GitLab, **Settings > Webhooks**). The webhook is subscribed to push,
    merge request and pipeline events and uses the
    ``project_gitlab.webhook_secret.<instance-url>/`` parameter of the
-   repository instance as secret token.
+   repository instance as secret: a ``whsec_`` value is installed on the
+   hook as its signing token, any other value as its plain secret token.
 
 5. **Optionally, map GitLab users to Odoo users**: go to **Settings >
    Users & Companies > Users**, open the user and fill the **Gitlab
