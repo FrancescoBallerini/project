@@ -78,3 +78,14 @@ and the **Create Webhooks** button deploys the webhook on both.
 Pattern-based matching only searches the tasks of the mapped projects:
 without a mapped project, pattern keys match nothing. Explicit
 `taskid#`/`tid#` references resolve globally and need no mapping.
+
+## Task keys
+
+Pattern matching looks for issue keys (e.g. `ABC-123`) in the reference
+fields of the tasks: the name, out of the box. A naming convention is
+enough — name your tasks `ABC-123 Fix the login` — but auto-generated
+keys scale better: the `project_key` module (same OCA repository) gives
+every task a unique key like `PROJ-1` in a dedicated field, and the
+matching picks it up automatically (the matching reads the display-name
+search fields of the task, which the module extends with its key
+field).

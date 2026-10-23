@@ -250,14 +250,17 @@ class ProjectGitEvent(models.Model):
           references to non-existent tasks are silently skipped;
 
         - issue key pattern: every extracted occurrence is searched in
-          the names of the tasks of the given projects (the projects
-          related to the repository URL), whatever the task state: a
-          reference to a closed task still links the git activity.
+          the reference fields of the tasks of the given projects (the
+          projects related to the repository URL), whatever the task
+          state: a reference to a closed task still links the git
+          activity. The reference fields are the display-name search
+          fields of the task (_rec_names_search): "name" out of the
+          box, plus e.g. the "key" field when project_key is installed.
 
         The key extraction is case-sensitive (avoids false positives
         such as "utf-8"); the extracted key is then searched in the
-        task names case-insensitively, as a task naming tolerance.
-        Returns flat project.task recordset.
+        reference fields case-insensitively, as a task naming
+        tolerance. Returns flat project.task recordset.
         """
         # sudo: the flow runs with the user who enqueued the webhook job
         # (the public user), which has no access to tasks on its own
@@ -282,11 +285,27 @@ class ProjectGitEvent(models.Model):
         if not (patterns and projects):
             return matching_tasks
 
-        # DB-side prefilter: candidate tasks whose name contains any
-        # key, substring case-insensitive (the extracted keys carry no
-        # LIKE wildcard). A whole-word match is always a substring
-        # match, so no true match can be lost here.
-        ilike_domains = [[("name", "ilike", pattern)] for pattern in patterns]
+        # Reference fields of the task: the display-name search fields
+        # (e.g. project_key adds its "key" field there), narrowed to
+        # the stored text fields an issue key can appear in; "name"
+        # when the model declares nothing searchable
+        task_fields = self.env["project.task"]._fields
+        task_reference_fields = [
+            field_name
+            for field_name in (self.env["project.task"]._rec_names_search or ["name"])
+            if task_fields[field_name].store
+            and task_fields[field_name].type in ("char", "text")
+        ] or ["name"]
+
+        # DB-side prefilter: candidate tasks carrying any key in any
+        # reference field, substring case-insensitive (the extracted
+        # keys carry no LIKE wildcard). A whole-word match is always a
+        # substring match, so no true match can be lost here.
+        ilike_domains = [
+            [(field_name, "ilike", pattern)]
+            for field_name in task_reference_fields
+            for pattern in patterns
+        ]
         candidate_tasks = (
             self.env["project.task"]
             .sudo()
@@ -301,9 +320,15 @@ class ProjectGitEvent(models.Model):
         # "AZ-123", the task "az-123 customer request.." is kept,
         # while "XAZ-1234 customer request.." is discarded
         for task in candidate_tasks:
+            task_references = [
+                task[field_name]
+                for field_name in task_reference_fields
+                if task[field_name]
+            ]
             if any(
-                re.search(rf"\b{re.escape(pattern)}\b", task.name, re.IGNORECASE)
+                re.search(rf"\b{re.escape(pattern)}\b", task_reference, re.IGNORECASE)
                 for pattern in patterns
+                for task_reference in task_references
             ):
                 matching_tasks |= task
 

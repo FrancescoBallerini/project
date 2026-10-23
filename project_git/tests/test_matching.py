@@ -1,6 +1,8 @@
 # Copyright 2026 Francesco Ballerini
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl.html).
 
+from unittest.mock import patch
+
 from .common import GITHUB_REPO_URL, GITLAB_REPO_URL, ProjectGitCase
 
 
@@ -42,6 +44,42 @@ class TestTaskMatching(ProjectGitCase):
             pattern_text=f"GL-100 fix tid#{self.gl_task_115.id}",
         )
         self.assertEqual(matching_tasks, self.gl_task_100 | self.gl_task_115)
+
+    def test_matching_searches_the_task_reference_fields(self):
+        # The pattern search covers every display-name search field of
+        # the task (_rec_names_search), not only the name: a key living
+        # in a dedicated field (e.g. the "key" field of project_key)
+        # matches too. Simulated with an existing stored Char field.
+        keyed_task = self.env["project.task"].create(
+            {
+                "name": "Login fix without any key in its name",
+                "project_id": self.gitlab_project.id,
+                "email_cc": "GL-100",
+            }
+        )
+        task_model = self.env.registry["project.task"]
+        with patch.object(task_model, "_rec_names_search", ["email_cc", "name"]):
+            matching_tasks = self.git_event._find_matching_tasks(
+                projects=self.gitlab_project, pattern_text="GL-100 fix the login"
+            )
+        # Both reference fields are searched: the simulated key field
+        # and, as always, the task name
+        self.assertIn(keyed_task, matching_tasks)
+        self.assertIn(self.gl_task_100, matching_tasks)
+
+    def test_matching_ignores_non_text_reference_fields(self):
+        # Non-text search fields another module may declare (e.g. an
+        # id) are skipped. The guarantee here is the absence of a
+        # crash, not the matched recordset: without the type filter
+        # the integer id of a candidate task would reach re.search,
+        # which raises TypeError on a non-string — the test would
+        # error out before the assertion
+        task_model = self.env.registry["project.task"]
+        with patch.object(task_model, "_rec_names_search", ["id", "name"]):
+            matching_tasks = self.git_event._find_matching_tasks(
+                projects=self.gitlab_project, pattern_text="GL-100 fix the login"
+            )
+        self.assertEqual(matching_tasks, self.gl_task_100)
 
     def test_repository_matching_by_dev_project_url(self):
         # git_dev_project_url is an alternative mapping surface,
