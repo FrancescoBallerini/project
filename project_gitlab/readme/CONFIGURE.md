@@ -35,7 +35,10 @@ Connect your GitLab repositories, step by step:
    is the instance root URL **with a trailing slash**, e.g.
    `project_gitlab.token.https://gitlab.com/`. This token lets Odoo
    call the GitLab API: fetch the MR commits, post messages on the MR,
-   deploy the webhook, retry CI jobs.
+   deploy the webhook, retry CI jobs. On a self-hosted instance whose
+   host name does not carry "gitlab", this parameter is also what
+   makes the **Retry CI Job (GitLab)** button appear on the projects
+   of its repositories.
 
    A missing token — or the demo default shipped by the module — makes
    the API calls fail with an explicit error: replace it with a real

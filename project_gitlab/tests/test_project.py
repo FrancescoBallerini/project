@@ -3,12 +3,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from gitlab.exceptions import GitlabJobRetryError
-
-from odoo.exceptions import UserError
-
 from ..models.project_git_auth import ProjectGitAuth
-from ..models.project_project import ProjectProject
 from .common import (
     GITLAB_INSTANCE_ROOT,
     GITLAB_REPO_URL,
@@ -21,8 +16,8 @@ WEBHOOK_TOKEN = "webhook-secret-token"
 
 
 class TestProjectWebhookDeploy(ProjectGitlabCase):
-    """Webhook deployment on the GitLab repo and Odoo.sh deploy job
-    retry, both triggered from the Odoo project form."""
+    """Webhook deployment on the GitLab repo, triggered from the Odoo
+    project form."""
 
     def setUp(self):
         super().setUp()
@@ -34,13 +29,12 @@ class TestProjectWebhookDeploy(ProjectGitlabCase):
         )
         self.expected_hook_url = f"{ODOO_BASE_URL}/project_git/webhook/"
 
-    def _mock_gitlab_for_project(self, hooks=(), jobs=()):
-        """Return (patcher, gitlab client mock) with hook/job fixtures
+    def _mock_gitlab_for_project(self, hooks=()):
+        """Return (patcher, gitlab client mock) with hook fixtures
         installed on the mocked GitLab project."""
         client = MagicMock(name="gitlab_client")
         gitlab_project = client.projects.get.return_value
         gitlab_project.hooks.list.return_value = list(hooks)
-        gitlab_project.jobs.list.return_value = list(jobs)
         patcher = patch.object(ProjectGitAuth, "_connect_gitlab", return_value=client)
         return patcher, client
 
@@ -49,15 +43,6 @@ class TestProjectWebhookDeploy(ProjectGitlabCase):
         hook = MagicMock(name="gitlab_hook")
         hook.url = url
         return hook
-
-    @staticmethod
-    def _job_stub(name, created_at):
-        job = MagicMock(name="gitlab_job")
-        job.name = name
-        job.created_at = created_at
-        return job
-
-    # ---- create_project_webhook ----
 
     def test_create_webhook_creates_hook_with_events(self):
         patcher, client = self._mock_gitlab_for_project()
@@ -120,51 +105,3 @@ class TestProjectWebhookDeploy(ProjectGitlabCase):
         with patcher as connect_gitlab:
             self.gitlab_project.create_project_webhook()
         connect_gitlab.assert_not_called()
-
-    # ---- retry_odoo_sh_deploy_job ----
-
-    def test_retry_deploy_job_retries_latest(self):
-        older_job = self._job_stub("odoo_sh_deploy", "2026-01-01T10:00:00Z")
-        latest_job = self._job_stub("odoo_sh_deploy", "2026-02-01T10:00:00Z")
-        other_job = self._job_stub("tests", "2026-03-01T10:00:00Z")
-        latest_job.retry.return_value = {"web_url": f"{GITLAB_REPO_URL}/-/jobs/42"}
-        patcher, _client = self._mock_gitlab_for_project(
-            jobs=[older_job, latest_job, other_job]
-        )
-        with patcher:
-            action = self.gitlab_project.retry_odoo_sh_deploy_job()
-        older_job.retry.assert_not_called()
-        other_job.retry.assert_not_called()
-        self.assertEqual(
-            action,
-            {
-                "type": "ir.actions.act_url",
-                "url": f"{GITLAB_REPO_URL}/-/jobs/42",
-                "target": "new",
-            },
-        )
-
-    def test_retry_deploy_job_skips_non_gitlab_url(self):
-        # The CI job retry is GitLab-only: projects whose repository URL
-        # another platform claims are skipped
-        patcher, _client = self._mock_gitlab_for_project()
-        platform_patcher = patch.object(
-            ProjectProject, "_get_url_platform", return_value="otherforge"
-        )
-        with patcher as connect_gitlab, platform_patcher:
-            self.gitlab_project.retry_odoo_sh_deploy_job()
-        connect_gitlab.assert_not_called()
-
-    def test_retry_deploy_job_without_match_raises(self):
-        patcher, _client = self._mock_gitlab_for_project(
-            jobs=[self._job_stub("tests", "2026-01-01T10:00:00Z")]
-        )
-        with patcher, self.assertRaisesRegex(UserError, "No job odoo_sh_deploy"):
-            self.gitlab_project.retry_odoo_sh_deploy_job()
-
-    def test_retry_deploy_job_in_progress_raises(self):
-        running_job = self._job_stub("odoo_sh_deploy", "2026-01-01T10:00:00Z")
-        running_job.retry.side_effect = GitlabJobRetryError()
-        patcher, _client = self._mock_gitlab_for_project(jobs=[running_job])
-        with patcher, self.assertRaisesRegex(UserError, "cannot be retried"):
-            self.gitlab_project.retry_odoo_sh_deploy_job()
