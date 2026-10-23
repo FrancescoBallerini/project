@@ -40,3 +40,24 @@ class ProjectGitBranch(models.Model):
             "A branch with the same URL is already tracked.",
         )
     ]
+
+    def _on_remote_deleted(self, event):
+        """React to the deletion of the remote branch of these records.
+
+        The base behavior is driven by the
+        project_git.on_branch_deletion system parameter: "delete"
+        unlinks the record, any other value ("preserve", the default)
+        keeps it. The deletion never cascades: the task and commit
+        links are plain relation rows, and the pull requests keep the
+        branch name in their source_branch field. Extension point for
+        modules needing another behavior (e.g. archiving).
+
+        :param dict event: the webhook event carrying the deletion
+        """
+        on_deletion = (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param("project_git.on_branch_deletion", "preserve")
+        )
+        if on_deletion == "delete":
+            self.sudo().unlink()

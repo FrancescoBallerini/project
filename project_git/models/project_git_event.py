@@ -120,13 +120,13 @@ class ProjectGitEvent(models.Model):
     @api.model
     def _process_branch_deletion_event(self, event):
         """Common processing for branch deletion events, shared by the
-        per-source _process_* handlers of the platform bridges."""
-        # Search for existing branch using the standardized helper (searches by URL)
+        per-source _process_* handlers of the platform bridges: the
+        tracked branch record, if any, reacts through its
+        _on_remote_deleted hook (kept or deleted, driven by the
+        project_git.on_branch_deletion system parameter)."""
         existing_branch = self._search_existing_branch(event=event)
-
         if existing_branch:
-            # For now we keep the record but we could add a 'deleted' tag or unlink here
-            pass
+            existing_branch._on_remote_deleted(event)
 
     @api.model
     def _process_commit_push_event(self, event):

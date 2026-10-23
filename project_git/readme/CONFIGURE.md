@@ -55,6 +55,15 @@ Technical > Parameters > System Parameters**:
 - the **API token** used by Odoo to call the platform (e.g.
   `project_github.token`).
 
+## Branch deletion
+
+A tracked branch record is kept by default when its branch is deleted
+on the platform. Set the `project_git.on_branch_deletion` system
+parameter to `delete` to remove the record instead (any other value
+means the default, `preserve`). The deletion never cascades: the
+related tasks, commits and pull requests are kept, and the pull
+requests keep the branch name as plain text.
+
 ## Project mapping
 
 Go to **Project > Configuration > Projects**, open the project and set

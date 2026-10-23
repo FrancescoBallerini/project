@@ -547,6 +547,10 @@ class TestGithubPush(ProjectGithubCase):
         )
 
     def test_branch_deletion_keeps_branch_record(self):
+        # Explicitly unset: the default behavior is preserve
+        self.env["ir.config_parameter"].sudo().set_param(
+            "project_git.on_branch_deletion", False
+        )
         creation = self._push_payload(
             ref="refs/heads/GH-100-feature",
             commits=[],
@@ -561,7 +565,28 @@ class TestGithubPush(ProjectGithubCase):
         )
         self._dispatch(deletion, "github")
 
-        # Current behavior: the branch record is kept on deletion
         branch = self._get_branch("GH-100-feature")
         self.assertEqual(len(branch), 1)
         self.assertIn(branch.id, self.gh_task_100.git_branch_ids.ids)
+
+    def test_branch_deletion_delete_param_removes_branch_record(self):
+        self.env["ir.config_parameter"].sudo().set_param(
+            "project_git.on_branch_deletion", "delete"
+        )
+        creation = self._push_payload(
+            ref="refs/heads/GH-100-feature",
+            commits=[],
+            before=NULL_SHA,
+            after="a" * 40,
+        )
+        self._dispatch(creation, "github")
+        self.assertEqual(len(self._get_branch("GH-100-feature")), 1)
+
+        deletion = self._push_payload(
+            ref="refs/heads/GH-100-feature", commits=[], before="a" * 40, after=NULL_SHA
+        )
+        self._dispatch(deletion, "github")
+
+        # The branch record is gone, the task only loses the link
+        self.assertFalse(self._get_branch("GH-100-feature"))
+        self.assertFalse(self.gh_task_100.git_branch_ids)
