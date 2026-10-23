@@ -6,10 +6,12 @@
         <field name="inherit_id" ref="project_git.view_project_project_form" />
         <field name="arch" type="xml">
             <xpath expr="//button[@name='create_project_webhook']" position="after">
+                <field name="gitlab_ci_available" invisible="1" />
                 <button
-                    name="retry_odoo_sh_deploy_job"
-                    string="Update Odoo.sh"
+                    name="action_open_ci_job_retry"
+                    string="Retry CI Job (GitLab)"
                     type="object"
+                    invisible="not gitlab_ci_available"
                 />
             </xpath>
         </field>

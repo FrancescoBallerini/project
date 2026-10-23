@@ -37,8 +37,8 @@ GitLab bridge for the ``project_git`` connector.
 It recognizes and authorizes GitLab webhook requests (push, merge
 request, pipeline events), maps GitLab users to Odoo users, tracks the
 CI pipeline status of the merge requests, deploys the webhook on the
-repository from the Odoo project form and can retry the latest
-``odoo_sh_deploy`` CI job.
+repository from the Odoo project form and can retry the CI jobs of the
+recent pipelines, picked from a wizard on the project form.
 
 Any GitLab instance is supported (gitlab.com or self-hosted), with one
 API token per instance.
@@ -101,7 +101,10 @@ Connect your GitLab repositories, step by step:
    the instance root URL **with a trailing slash**, e.g.
    ``project_gitlab.token.https://gitlab.com/``. This token lets Odoo
    call the GitLab API: fetch the MR commits, post messages on the MR,
-   deploy the webhook, retry CI jobs.
+   deploy the webhook, retry CI jobs. On a self-hosted instance whose
+   host name does not carry "gitlab", this parameter is also what makes
+   the **Retry CI Job (GitLab)** button appear on the projects of its
+   repositories.
 
    A missing token — or the demo default shipped by the module — makes
    the API calls fail with an explicit error: replace it with a real
@@ -131,17 +134,6 @@ Usage
 See the ``project_git`` documentation for the full usage guide: linking
 your git activity to a task step by step, how the matching works and
 which entity gets linked.
-
-Known issues / Roadmap
-======================
-
-- The **Update Odoo.sh** button retries the latest successful GitLab CI
-  job named ``odoo_sh_deploy`` — the job name is hardcoded, reflecting
-  the original author's deployment workflow, where a CI job pushes the
-  code to an Odoo.sh instance. The job name could be made configurable
-  (e.g. a field on the project, defaulting to ``odoo_sh_deploy``),
-  turning the button into a generic "retry the deploy CI job" action for
-  any deployment pipeline.
 
 Bug Tracker
 ===========

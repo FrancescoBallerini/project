@@ -2,6 +2,7 @@
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl.html).
 
 from . import test_auth
+from . import test_ci_job_retry
 from . import test_controller
 from . import test_gitlab
 from . import test_project

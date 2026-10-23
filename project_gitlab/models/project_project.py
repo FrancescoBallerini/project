@@ -2,9 +2,9 @@
 # Copyright 2026 Francesco Ballerini
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl.html).
 
-from gitlab.exceptions import GitlabJobRetryError
+from urllib.parse import urlparse
 
-from odoo import _, api, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 from .project_git_auth import SIGNING_SECRET_PREFIX
@@ -12,6 +12,44 @@ from .project_git_auth import SIGNING_SECRET_PREFIX
 
 class ProjectProject(models.Model):
     _inherit = "project.project"
+
+    gitlab_ci_available = fields.Boolean(
+        compute="_compute_gitlab_ci_available",
+        help="Technical field showing the CI job retry button: whether "
+        "one of the repository URLs of the project is hosted on GitLab",
+    )
+
+    @api.depends("git_project_url", "git_dev_project_url")
+    def _compute_gitlab_ci_available(self):
+        for project in self:
+            project.gitlab_ci_available = any(
+                project._is_gitlab_repository_url(project_url)
+                for project_url in (
+                    project.git_project_url,
+                    project.git_dev_project_url,
+                )
+            )
+
+    @api.model
+    def _is_gitlab_repository_url(self, project_url):
+        """Whether the repository URL is hosted on GitLab."""
+        if not project_url:
+            return False
+        # gitlab.com and the self-hosted instances carrying "gitlab" in
+        # the host name
+        if "gitlab" in urlparse(project_url).netloc:
+            return True
+        # Self-hosted instance on a custom domain: nothing in the URL
+        # says GitLab, so the configured API token sysparam of its
+        # instance root is what declares the host as a GitLab one
+        instance_root = self.env["project.git.auth"]._get_gitlab_instance_root(
+            project_url
+        )
+        return bool(
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param("project_gitlab.token." + instance_root)
+        )
 
     @api.model
     def _get_url_platform(self, project_url):
@@ -51,37 +89,25 @@ class ProjectProject(models.Model):
             }
         )
 
-    def retry_odoo_sh_deploy_job(self):
-        for project in self:
-            # The CI job retry is a GitLab-only feature
-            if (
-                not project.git_project_url
-                or self._get_url_platform(project.git_project_url) != "gitlab"
-            ):
-                continue
-            gl = self.env["project.git.auth"]._connect_gitlab(
-                url=project.git_project_url
+    def action_open_ci_job_retry(self):
+        """Open the CI job retry wizard on the first project repository
+        hosted on GitLab (production first, same rule that shows the
+        button)."""
+        self.ensure_one()
+        repository = False
+        for candidate, project_url in (
+            ("production", self.git_project_url),
+            ("development", self.git_dev_project_url),
+        ):
+            if self._is_gitlab_repository_url(project_url):
+                repository = candidate
+                break
+        # The CI job retry is a GitLab-only feature
+        if not repository:
+            raise UserError(
+                _("The CI job retry is available on GitLab repositories only.")
             )
-            gitlab_project = gl.projects.get(
-                self._git_project_path(project.git_project_url)
-            )
-            jobs = gitlab_project.jobs.list(scope="success", get_all=False)
-            latest_job = False
-            for job in filter(lambda x: x.name == "odoo_sh_deploy", jobs):
-                if not latest_job or job.created_at > latest_job.created_at:
-                    latest_job = job
-            if latest_job:
-                try:
-                    response = latest_job.retry()
-                except GitlabJobRetryError as err:
-                    raise UserError(
-                        _("Job cannot be retried, it is a job in progress")
-                    ) from err
-                if response.get("web_url"):
-                    return {
-                        "type": "ir.actions.act_url",
-                        "url": response.get("web_url"),
-                        "target": "new",
-                    }
-                raise UserError(_("Job odoo_sh_deploy has been retried"))
-            raise UserError(_("No job odoo_sh_deploy found"))
+        wizard = self.env["project.gitlab.ci.job.retry"].create(
+            {"project_id": self.id, "git_project_url_type": repository}
+        )
+        return wizard.action_load_jobs()
