@@ -11,8 +11,8 @@ from hmac import HMAC
 from odoo.tests import tagged
 
 from odoo.addons.project_git.tests.common import TEST_TOKEN, ProjectGitControllerCase
-from odoo.addons.project_gitlab.models.project_git_auth import SIGNING_SECRET_PREFIX
 
+from ..models.project_git_auth import SIGNING_SECRET_PREFIX
 from .common import GITLAB_INSTANCE_ROOT, TEST_SIGNING_SECRET
 
 # Delivery header value the way GitLab sends it: the instance root URL

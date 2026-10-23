@@ -12,9 +12,10 @@ from odoo.addons.project_git.tests.common import (
     NULL_SHA,
     ProjectGitCase,
 )
-from odoo.addons.project_github.controllers.main import ProjectGithubWebhook
-from odoo.addons.project_github.models.project_git_auth import ProjectGitAuth
 from odoo.addons.queue_job.tests.common import trap_jobs
+
+from ..controllers.main import ProjectGithubWebhook
+from ..models.project_git_auth import ProjectGitAuth
 
 __all__ = ["GITHUB_REPO_URL", "NULL_SHA", "ProjectGithubCase"]
 

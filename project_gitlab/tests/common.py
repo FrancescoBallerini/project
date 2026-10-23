@@ -12,12 +12,10 @@ from odoo.addons.project_git.tests.common import (
     NULL_SHA,
     ProjectGitCase,
 )
-from odoo.addons.project_gitlab.controllers.main import ProjectGitlabWebhook
-from odoo.addons.project_gitlab.models.project_git_auth import (
-    SIGNING_SECRET_PREFIX,
-    ProjectGitAuth,
-)
 from odoo.addons.queue_job.tests.common import trap_jobs
+
+from ..controllers.main import ProjectGitlabWebhook
+from ..models.project_git_auth import SIGNING_SECRET_PREFIX, ProjectGitAuth
 
 __all__ = [
     "GITLAB_INSTANCE_ROOT",

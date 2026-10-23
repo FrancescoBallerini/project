@@ -3,8 +3,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from odoo.addons.project_github.models.project_git_auth import ProjectGitAuth
-
+from ..models.project_git_auth import ProjectGitAuth
 from .common import ProjectGithubCase
 
 ODOO_BASE_URL = "https://odoo.example.com"

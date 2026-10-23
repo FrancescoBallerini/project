@@ -7,9 +7,8 @@ from gitlab.exceptions import GitlabJobRetryError
 
 from odoo.exceptions import UserError
 
-from odoo.addons.project_gitlab.models.project_git_auth import ProjectGitAuth
-from odoo.addons.project_gitlab.models.project_project import ProjectProject
-
+from ..models.project_git_auth import ProjectGitAuth
+from ..models.project_project import ProjectProject
 from .common import (
     GITLAB_INSTANCE_ROOT,
     GITLAB_REPO_URL,

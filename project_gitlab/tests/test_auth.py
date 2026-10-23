@@ -3,8 +3,7 @@
 
 from unittest.mock import patch
 
-from odoo.addons.project_gitlab.models import project_git_auth
-
+from ..models import project_git_auth
 from .common import GITLAB_INSTANCE_ROOT, GITLAB_REPO_URL, ProjectGitlabCase
 
 
