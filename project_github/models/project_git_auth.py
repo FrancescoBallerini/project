@@ -4,7 +4,7 @@
 
 import logging
 
-from github import Github
+from github import Auth, Github
 from github.GithubException import BadCredentialsException
 
 from odoo import _, api, models
@@ -19,7 +19,7 @@ class ProjectGitAuth(models.AbstractModel):
     @api.model
     def _connect_github(self):
         """Connect to github instance and return github object"""
-        return Github(self._get_token_param("project_github.token"))
+        return Github(auth=Auth.Token(self._get_token_param("project_github.token")))
 
     @api.model
     def _github_api_user_error(self, err, project_url):

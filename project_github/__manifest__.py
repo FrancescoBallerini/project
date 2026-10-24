@@ -22,7 +22,8 @@
     ],
     "external_dependencies": {
         "python": [
-            "PyGithub",
+            # The Auth.Token authentication object needs PyGithub 1.59
+            "PyGithub>=1.59",
         ],
     },
 }
