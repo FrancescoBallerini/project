@@ -8,11 +8,20 @@
             <xpath expr="//field[@name='alias_contact']" position="after">
                 <field name="git_project_url" widget="url" />
                 <field name="git_dev_project_url" widget="url" />
-                <button
-                    name="create_project_webhook"
-                    string="Create Webhooks"
-                    type="object"
-                />
+                <!-- Vertical stack: the buttons the platform bridges
+                     append after the deploy one land in this container,
+                     one per row, instead of scattering in the group grid -->
+                <div
+                    name="project_git_buttons"
+                    colspan="2"
+                    class="d-flex flex-column gap-2 align-items-start"
+                >
+                    <button
+                        name="create_project_webhook"
+                        string="Create Webhooks"
+                        type="object"
+                    />
+                </div>
             </xpath>
         </field>
     </record>
