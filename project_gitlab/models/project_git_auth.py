@@ -2,11 +2,16 @@
 # Copyright 2026 Francesco Ballerini
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl.html).
 
+import logging
 from urllib.parse import urljoin
 
 import gitlab  # pylint: disable=W7935
+from gitlab.exceptions import GitlabAuthenticationError
 
-from odoo import api, models
+from odoo import _, api, models
+from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
 
 # Prefix of the GitLab webhook signing tokens (Standard Webhooks
 # secret format, GitLab >= 19.1): a webhook_secret sysparam value
@@ -44,3 +49,37 @@ class ProjectGitAuth(models.AbstractModel):
         url = self._get_gitlab_instance_root(url)
         token = self._get_token_param("project_gitlab.token." + url)
         return gitlab.Gitlab(url, private_token=token, retry_transient_errors=True)
+
+    @api.model
+    def _gitlab_api_user_error(self, err, project_url):
+        """Actionable UserError for a python-gitlab API error, to raise
+        from it. The original traceback is logged here: the HTTP layer
+        logs a UserError without it."""
+        _logger.warning("GitLab API error while calling %s", project_url, exc_info=err)
+        if isinstance(err, GitlabAuthenticationError):
+            # The token passed the demo-default guard but the instance
+            # rejects it: expired, revoked or mistyped
+            token_key = "project_gitlab.token." + self._get_gitlab_instance_root(
+                project_url
+            )
+            return UserError(
+                _(
+                    "GitLab rejected the API call (%(error)s): check the "
+                    "token of the %(key)s system parameter.",
+                    error=err.error_message,
+                    key=token_key,
+                )
+            )
+        if err.response_code == 404:
+            # GitLab also answers 404 (not 403) for a private project
+            # the token cannot see, to not disclose its existence
+            return UserError(
+                _(
+                    'GitLab cannot find the project "%(path)s" (from the '
+                    "repository URL %(url)s): check how the URL is written, "
+                    "and that the API token can access the repository.",
+                    path=self.env["project.project"]._git_project_path(project_url),
+                    url=project_url,
+                )
+            )
+        return UserError(_("GitLab API error: %s", err.error_message))

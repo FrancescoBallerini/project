@@ -3,6 +3,10 @@
 
 from unittest.mock import MagicMock, patch
 
+from gitlab.exceptions import GitlabAuthenticationError, GitlabError
+
+from odoo.exceptions import UserError
+
 from ..models.project_git_auth import ProjectGitAuth
 from .common import (
     GITLAB_INSTANCE_ROOT,
@@ -105,3 +109,38 @@ class TestProjectWebhookDeploy(ProjectGitlabCase):
         with patcher as connect_gitlab:
             self.gitlab_project.create_project_webhook()
         connect_gitlab.assert_not_called()
+
+    def test_create_webhook_auth_error_raises_clean_error(self):
+        # A token the instance rejects surfaces as a UserError pointing
+        # at the token sysparam, not as a raw traceback
+        patcher, client = self._mock_gitlab_for_project()
+        client.projects.get.side_effect = GitlabAuthenticationError(
+            "401 Unauthorized", response_code=401
+        )
+        with patcher, self.assertRaisesRegex(
+            UserError, "401 Unauthorized.*project_gitlab.token"
+        ):
+            self.gitlab_project.create_project_webhook()
+
+    def test_create_webhook_not_found_names_the_project(self):
+        # The 404 names the exact project path we looked up
+        patcher, client = self._mock_gitlab_for_project()
+        client.projects.get.side_effect = GitlabError(
+            "404 Project Not Found", response_code=404
+        )
+        with patcher, self.assertRaisesRegex(
+            UserError, 'cannot find the project "acme/demo-repo"'
+        ):
+            self.gitlab_project.create_project_webhook()
+
+    def test_create_webhook_api_error_raises_clean_error(self):
+        # Any other GitLab API error surfaces as a UserError carrying
+        # the platform message verbatim
+        patcher, client = self._mock_gitlab_for_project()
+        client.projects.get.side_effect = GitlabError(
+            "403 Forbidden", response_code=403
+        )
+        with patcher, self.assertRaisesRegex(
+            UserError, "GitLab API error: 403 Forbidden"
+        ):
+            self.gitlab_project.create_project_webhook()

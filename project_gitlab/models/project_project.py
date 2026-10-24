@@ -4,6 +4,8 @@
 
 from urllib.parse import urlparse
 
+from gitlab.exceptions import GitlabError
+
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
@@ -60,11 +62,6 @@ class ProjectProject(models.Model):
     def _create_project_webhook_gitlab(self, project_url):
         git_auth = self.env["project.git.auth"]
         gl = git_auth._connect_gitlab(url=project_url)
-        gitlab_project = gl.projects.get(self._git_project_path(project_url))
-        odoo_url = self._get_webhook_url()
-        for hook in gitlab_project.hooks.list():
-            if hook.url == odoo_url:
-                hook.delete()
         instance_root = git_auth._get_gitlab_instance_root(project_url)
         webhook_secret = (
             self.env["ir.config_parameter"]
@@ -78,16 +75,24 @@ class ProjectProject(models.Model):
             if webhook_secret and webhook_secret.startswith(SIGNING_SECRET_PREFIX)
             else "token"
         )
-        gitlab_project.hooks.create(
-            {
-                "url": odoo_url,
-                "push_events": True,
-                "merge_requests_events": True,
-                "pipeline_events": True,
-                "enable_ssl_verification": True,
-                secret_attribute: webhook_secret,
-            }
-        )
+        odoo_url = self._get_webhook_url()
+        try:
+            gitlab_project = gl.projects.get(self._git_project_path(project_url))
+            for hook in gitlab_project.hooks.list():
+                if hook.url == odoo_url:
+                    hook.delete()
+            gitlab_project.hooks.create(
+                {
+                    "url": odoo_url,
+                    "push_events": True,
+                    "merge_requests_events": True,
+                    "pipeline_events": True,
+                    "enable_ssl_verification": True,
+                    secret_attribute: webhook_secret,
+                }
+            )
+        except GitlabError as err:
+            raise git_auth._gitlab_api_user_error(err, project_url) from err
 
     def action_open_ci_job_retry(self):
         """Open the CI job retry wizard on the first project repository

@@ -3,6 +3,11 @@
 
 from unittest.mock import MagicMock, patch
 
+from github import GithubException
+from github.GithubException import BadCredentialsException
+
+from odoo.exceptions import UserError
+
 from ..models.project_git_auth import ProjectGitAuth
 from .common import ProjectGithubCase
 
@@ -70,3 +75,38 @@ class TestProjectWebhookDeploy(ProjectGithubCase):
         stale_hook.delete.assert_called_once_with()
         foreign_hook.delete.assert_not_called()
         github_client.get_repo.return_value.create_hook.assert_called_once()
+
+    def test_create_webhook_auth_error_raises_clean_error(self):
+        # A token GitHub rejects surfaces as a UserError pointing at
+        # the token sysparam, not as a raw traceback
+        patcher, github_client = self._mock_github_for_project()
+        github_client.get_repo.side_effect = BadCredentialsException(
+            401, {"message": "Bad credentials"}, None
+        )
+        with patcher, self.assertRaisesRegex(
+            UserError, "Bad credentials.*project_github.token"
+        ):
+            self.githubcom_project.create_project_webhook()
+
+    def test_create_webhook_not_found_names_the_repository(self):
+        # The 404 names the exact repository path we looked up
+        patcher, github_client = self._mock_github_for_project()
+        github_client.get_repo.side_effect = GithubException(
+            404, {"message": "Not Found"}, None
+        )
+        with patcher, self.assertRaisesRegex(
+            UserError, 'cannot find the repository "acme/webhook-demo"'
+        ):
+            self.githubcom_project.create_project_webhook()
+
+    def test_create_webhook_api_error_raises_clean_error(self):
+        # Any other GitHub API error surfaces as a UserError carrying
+        # the platform message
+        patcher, github_client = self._mock_github_for_project()
+        github_client.get_repo.side_effect = GithubException(
+            422, {"message": "Validation Failed"}, None
+        )
+        with patcher, self.assertRaisesRegex(
+            UserError, "GitHub API error: Validation Failed"
+        ):
+            self.githubcom_project.create_project_webhook()

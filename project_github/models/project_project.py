@@ -4,6 +4,8 @@
 
 from urllib.parse import urlparse
 
+from github import GithubException
+
 from odoo import api, models
 
 
@@ -19,24 +21,29 @@ class ProjectProject(models.Model):
         return super()._get_url_platform(project_url)
 
     def _create_project_webhook_github(self, project_url):
-        github_client = self.env["project.git.auth"]._connect_github()
-        github_repo = github_client.get_repo(self._git_project_path(project_url))
+        git_auth = self.env["project.git.auth"]
+        github_client = git_auth._connect_github()
         odoo_url = self._get_webhook_url()
-        for hook in github_repo.get_hooks():
-            if hook.config.get("url") == odoo_url:
-                hook.delete()
-        github_repo.create_hook(
-            # The secret signs the payload (X-Hub-Signature-256), which is
-            # how the controller authorizes and recognizes GitHub events
-            name="web",
-            config={
-                "url": odoo_url,
-                "content_type": "json",
-                "secret": self.env["ir.config_parameter"]
-                .sudo()
-                .get_param("project_github.webhook_secret"),
-                "insecure_ssl": "0",
-            },
-            events=["push", "pull_request"],
-            active=True,
-        )
+        try:
+            github_repo = github_client.get_repo(self._git_project_path(project_url))
+            for hook in github_repo.get_hooks():
+                if hook.config.get("url") == odoo_url:
+                    hook.delete()
+            github_repo.create_hook(
+                # The secret signs the payload (X-Hub-Signature-256), which
+                # is how the controller authorizes and recognizes GitHub
+                # events
+                name="web",
+                config={
+                    "url": odoo_url,
+                    "content_type": "json",
+                    "secret": self.env["ir.config_parameter"]
+                    .sudo()
+                    .get_param("project_github.webhook_secret"),
+                    "insecure_ssl": "0",
+                },
+                events=["push", "pull_request"],
+                active=True,
+            )
+        except GithubException as err:
+            raise git_auth._github_api_user_error(err, project_url) from err

@@ -4,11 +4,7 @@
 from datetime import timezone
 
 from dateutil.parser import isoparse
-from gitlab.exceptions import (
-    GitlabAuthenticationError,
-    GitlabError,
-    GitlabJobRetryError,
-)
+from gitlab.exceptions import GitlabError, GitlabJobRetryError
 
 from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError
@@ -78,7 +74,9 @@ class ProjectGitlabCiJobRetry(models.TransientModel):
         try:
             lines_vals = self._fetch_ci_jobs_gitlab()
         except GitlabError as err:
-            raise self._gitlab_api_user_error(err) from err
+            raise self.env["project.git.auth"]._gitlab_api_user_error(
+                err, self._get_repository_url()
+            ) from err
         self.env["project.gitlab.ci.job.retry.line"].create(lines_vals)
         return {
             "type": "ir.actions.act_window",
@@ -117,38 +115,6 @@ class ProjectGitlabCiJobRetry(models.TransientModel):
         project_url = self._get_repository_url()
         gl = self.env["project.git.auth"]._connect_gitlab(url=project_url)
         return gl.projects.get(self.project_id._git_project_path(project_url))
-
-    def _gitlab_api_user_error(self, err):
-        """Actionable UserError for a python-gitlab API error, to raise
-        from it (the raw traceback stays chained in the server log)."""
-        if isinstance(err, GitlabAuthenticationError):
-            # The token passed the demo-default guard but the instance
-            # rejects it: expired, revoked or mistyped
-            instance_root = self.env["project.git.auth"]._get_gitlab_instance_root(
-                self._get_repository_url()
-            )
-            return UserError(
-                _(
-                    "GitLab rejected the API call (%(error)s): check the "
-                    "token of the %(key)s system parameter.",
-                    error=err.error_message,
-                    key="project_gitlab.token." + instance_root,
-                )
-            )
-        if err.response_code == 404:
-            # GitLab also answers 404 (not 403) for a private project
-            # the token cannot see, to not disclose its existence
-            project_url = self._get_repository_url()
-            return UserError(
-                _(
-                    'GitLab cannot find the project "%(path)s" (from the '
-                    "repository URL %(url)s): check how the URL is written, "
-                    "and that the API token can access the repository.",
-                    path=self.project_id._git_project_path(project_url),
-                    url=project_url,
-                )
-            )
-        return UserError(_("GitLab API error: %s", err.error_message))
 
     def _fetch_ci_jobs_gitlab(self):
         """Line values of the finished jobs of the last pipelines,
@@ -232,7 +198,9 @@ class ProjectGitlabCiJobRetryLine(models.TransientModel):
         except GitlabJobRetryError as err:
             raise UserError(_("Job %s cannot be retried.", self.name)) from err
         except GitlabError as err:
-            raise self.wizard_id._gitlab_api_user_error(err) from err
+            raise self.env["project.git.auth"]._gitlab_api_user_error(
+                err, self.wizard_id._get_repository_url()
+            ) from err
         new_job_url = new_job.get("web_url")
         if new_job_url:
             # The %s placeholder is rendered by the notification as the
