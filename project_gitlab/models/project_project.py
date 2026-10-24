@@ -94,7 +94,7 @@ class ProjectProject(models.Model):
         except GitlabError as err:
             raise git_auth._gitlab_api_user_error(err, project_url) from err
 
-    def action_open_ci_job_retry(self):
+    def action_open_ci_job_retry_gitlab(self):
         """Open the CI job retry wizard on the first project repository
         hosted on GitLab (production first, same rule that shows the
         button)."""

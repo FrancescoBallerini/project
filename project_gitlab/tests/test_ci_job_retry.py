@@ -62,7 +62,7 @@ class TestCiJobRetry(ProjectGitlabCase):
         (wizard, gitlab project mock)."""
         patcher, gitlab_project = self._mock_gitlab_pipelines(pipelines)
         with patcher:
-            action = self.gitlab_project.action_open_ci_job_retry()
+            action = self.gitlab_project.action_open_ci_job_retry_gitlab()
         wizard = self.env["project.gitlab.ci.job.retry"].browse(action["res_id"])
         return wizard, gitlab_project
 
@@ -212,7 +212,7 @@ class TestCiJobRetry(ProjectGitlabCase):
             "401 Unauthorized.*project_gitlab.token.https://gitlab.example.com/"
         )
         with patcher, self.assertRaisesRegex(UserError, expected_error):
-            self.gitlab_project.action_open_ci_job_retry()
+            self.gitlab_project.action_open_ci_job_retry_gitlab()
 
     def test_load_jobs_not_found_names_the_project(self):
         # The 404 names the exact project path we looked up: unlike
@@ -224,7 +224,7 @@ class TestCiJobRetry(ProjectGitlabCase):
         with patcher, self.assertRaisesRegex(
             UserError, 'cannot find the project "acme/demo-repo"'
         ):
-            self.gitlab_project.action_open_ci_job_retry()
+            self.gitlab_project.action_open_ci_job_retry_gitlab()
 
     def test_load_jobs_api_error_raises_clean_error(self):
         # Any other GitLab API error surfaces as a UserError carrying
@@ -236,7 +236,7 @@ class TestCiJobRetry(ProjectGitlabCase):
         with patcher, self.assertRaisesRegex(
             UserError, "GitLab API error: 403 Forbidden"
         ):
-            self.gitlab_project.action_open_ci_job_retry()
+            self.gitlab_project.action_open_ci_job_retry_gitlab()
 
     def test_retry_auth_error_raises_clean_error(self):
         wizard, _gitlab_project = self._open_wizard(
@@ -261,7 +261,7 @@ class TestCiJobRetry(ProjectGitlabCase):
         self.gitlab_project.git_project_url = "https://forge.example.com/acme/repo"
         self.assertFalse(self.gitlab_project.gitlab_ci_available)
         with self.assertRaisesRegex(UserError, "GitLab"):
-            self.gitlab_project.action_open_ci_job_retry()
+            self.gitlab_project.action_open_ci_job_retry_gitlab()
 
     def test_gitlab_mention_in_repo_name_is_not_gitlab(self):
         # Only the host is matched: a repository merely named after
@@ -271,7 +271,7 @@ class TestCiJobRetry(ProjectGitlabCase):
         )
         self.assertFalse(self.gitlab_project.gitlab_ci_available)
         with self.assertRaisesRegex(UserError, "GitLab"):
-            self.gitlab_project.action_open_ci_job_retry()
+            self.gitlab_project.action_open_ci_job_retry_gitlab()
 
     def test_custom_domain_with_token_is_gitlab(self):
         # A self-hosted instance on a host without "gitlab" in the name
@@ -285,13 +285,13 @@ class TestCiJobRetry(ProjectGitlabCase):
         self.assertTrue(self.gitlab_project.gitlab_ci_available)
         patcher, _gitlab_project = self._mock_gitlab_pipelines()
         with patcher as connect_gitlab:
-            self.gitlab_project.action_open_ci_job_retry()
+            self.gitlab_project.action_open_ci_job_retry_gitlab()
         connect_gitlab.assert_called_once_with(url="https://git.example.com/acme/repo")
 
     def test_open_wizard_without_url_raises(self):
         self.gitlab_project.git_project_url = False
         with self.assertRaisesRegex(UserError, "GitLab"):
-            self.gitlab_project.action_open_ci_job_retry()
+            self.gitlab_project.action_open_ci_job_retry_gitlab()
 
     def test_open_wizard_on_dev_repository_url(self):
         # The wizard falls back to the dev repository URL when the
@@ -300,7 +300,7 @@ class TestCiJobRetry(ProjectGitlabCase):
         self.gitlab_project.git_dev_project_url = f"{GITLAB_REPO_URL}-dev"
         patcher, _gitlab_project = self._mock_gitlab_pipelines()
         with patcher as connect_gitlab:
-            action = self.gitlab_project.action_open_ci_job_retry()
+            action = self.gitlab_project.action_open_ci_job_retry_gitlab()
         connect_gitlab.assert_called_once_with(url=f"{GITLAB_REPO_URL}-dev")
         wizard = self.env["project.gitlab.ci.job.retry"].browse(action["res_id"])
         self.assertEqual(wizard.git_project_url_type, "development")

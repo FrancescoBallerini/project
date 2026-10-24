@@ -18,7 +18,9 @@ Connect your GitHub repositories, step by step:
    activated, set the parameter from **Settings > Technical >
    Parameters > System Parameters**. This token lets Odoo call the
    GitHub API: fetch the PR commits, post messages on the PR, deploy
-   the webhook.
+   the webhook, retry CI jobs (this last one needs the `repo` scope on
+   a classic token, or the Actions read and write permission on a
+   fine-grained one).
 
    PR commit tracking relies entirely on this fetch: without the token
    no PR commit is tracked (the GitHub webhook data does not include

@@ -378,8 +378,10 @@ ul.auto-toc {
 <p>GitHub bridge for the <tt class="docutils literal">project_git</tt> connector.</p>
 <p>It recognizes and authorizes GitHub webhook requests (push and pull
 request events, classified by the <tt class="docutils literal"><span class="pre">X-GitHub-Event</span></tt> header and signed
-with the shared secret), maps GitHub users to Odoo users and deploys the
-webhook on the repository from the Odoo project form.</p>
+with the shared secret), maps GitHub users to Odoo users, deploys the
+webhook on the repository from the Odoo project form and can retry the
+GitHub Actions jobs of the recent workflow runs, picked from a wizard on
+the project form.</p>
 <p>Only <tt class="docutils literal">github.com</tt> repositories are supported (no Enterprise base URL).</p>
 <p><strong>Table of contents</strong></p>
 <div class="contents local topic" id="contents">
@@ -427,7 +429,9 @@ GitHub from your avatar menu, <strong>Settings &gt; Developer settings &gt;
 Personal access tokens</strong>; in Odoo, with the developer mode activated,
 set the parameter from <strong>Settings &gt; Technical &gt; Parameters &gt; System
 Parameters</strong>. This token lets Odoo call the GitHub API: fetch the PR
-commits, post messages on the PR, deploy the webhook.</p>
+commits, post messages on the PR, deploy the webhook, retry CI jobs
+(this last one needs the <tt class="docutils literal">repo</tt> scope on a classic token, or the
+Actions read and write permission on a fine-grained one).</p>
 <p>PR commit tracking relies entirely on this fetch: without the token
 no PR commit is tracked (the GitHub webhook data does not include
 usable commit information to fall back on).</p>

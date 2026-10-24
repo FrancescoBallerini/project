@@ -8,7 +8,7 @@
             <xpath expr="//button[@name='create_project_webhook']" position="after">
                 <field name="gitlab_ci_available" invisible="1" />
                 <button
-                    name="action_open_ci_job_retry"
+                    name="action_open_ci_job_retry_gitlab"
                     string="Retry CI Job (GitLab)"
                     type="object"
                     invisible="not gitlab_ci_available"

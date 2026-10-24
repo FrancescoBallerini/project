@@ -36,8 +36,10 @@ GitHub bridge for the ``project_git`` connector.
 
 It recognizes and authorizes GitHub webhook requests (push and pull
 request events, classified by the ``X-GitHub-Event`` header and signed
-with the shared secret), maps GitHub users to Odoo users and deploys the
-webhook on the repository from the Odoo project form.
+with the shared secret), maps GitHub users to Odoo users, deploys the
+webhook on the repository from the Odoo project form and can retry the
+GitHub Actions jobs of the recent workflow runs, picked from a wizard on
+the project form.
 
 Only ``github.com`` repositories are supported (no Enterprise base URL).
 
@@ -80,7 +82,9 @@ Connect your GitHub repositories, step by step:
    Personal access tokens**; in Odoo, with the developer mode activated,
    set the parameter from **Settings > Technical > Parameters > System
    Parameters**. This token lets Odoo call the GitHub API: fetch the PR
-   commits, post messages on the PR, deploy the webhook.
+   commits, post messages on the PR, deploy the webhook, retry CI jobs
+   (this last one needs the ``repo`` scope on a classic token, or the
+   Actions read and write permission on a fine-grained one).
 
    PR commit tracking relies entirely on this fetch: without the token
    no PR commit is tracked (the GitHub webhook data does not include

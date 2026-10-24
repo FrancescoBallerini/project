@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <record id="view_github_ci_job_retry_form" model="ir.ui.view">
+        <field name="name">project.github.ci.job.retry.form</field>
+        <field name="model">project.github.ci.job.retry</field>
+        <field name="arch" type="xml">
+            <form string="Retry CI Job">
+                <group>
+                    <group>
+                        <field name="project_id" />
+                        <field name="git_project_url_type" widget="radio" />
+                    </group>
+                    <group>
+                        <label for="run_count" />
+                        <div class="o_row">
+                            <field name="run_count" />
+                            <button
+                                name="action_load_jobs"
+                                string="Reload"
+                                type="object"
+                                icon="fa-refresh"
+                            />
+                        </div>
+                    </group>
+                </group>
+                <field name="line_ids">
+                    <tree create="false" delete="false" editable="bottom">
+                        <field name="run_number" />
+                        <field name="run_ref" />
+                        <field name="run_status" />
+                        <field name="workflow" />
+                        <field name="name" />
+                        <field name="status" />
+                        <field name="date" />
+                        <button
+                            name="action_open_job"
+                            string="Open"
+                            title="Open the job on GitHub"
+                            type="object"
+                            icon="fa-external-link"
+                        />
+                        <button
+                            name="action_retry"
+                            string="Retry"
+                            type="object"
+                            icon="fa-repeat"
+                        />
+                    </tree>
+                </field>
+                <footer>
+                    <button string="Close" class="btn-secondary" special="cancel" />
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

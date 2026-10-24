@@ -18,7 +18,10 @@
     "data": [
         "data/ir_config_parameter.xml",
         "data/project_tags_data.xml",
+        "security/ir.model.access.csv",
+        "views/project_project_view.xml",
         "views/res_users_view.xml",
+        "wizards/project_github_ci_job_retry_view.xml",
     ],
     "external_dependencies": {
         "python": [

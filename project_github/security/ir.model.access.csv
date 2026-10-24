@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_project_github_ci_job_retry,access_project_github_ci_job_retry,model_project_github_ci_job_retry,base.group_user,1,1,1,1
+access_project_github_ci_job_retry_line,access_project_github_ci_job_retry_line,model_project_github_ci_job_retry_line,base.group_user,1,1,1,1
