@@ -25,13 +25,32 @@
                 </group>
                 <field name="line_ids">
                     <tree create="false" delete="false" editable="bottom">
-                        <field name="id_pipeline" />
-                        <field name="pipeline_ref" />
-                        <field name="pipeline_status" />
-                        <field name="stage" />
+                        <!-- What is retried first, where it lives after -->
                         <field name="name" />
-                        <field name="status" />
+                        <field
+                            name="status"
+                            widget="badge"
+                            decoration-success="status == 'success'"
+                            decoration-danger="status == 'failed'"
+                            decoration-muted="status == 'canceled'"
+                        />
+                        <field name="stage" />
+                        <field name="commit_title" />
+                        <field name="pipeline_ref" />
+                        <field name="id_pipeline" />
+                        <field
+                            name="pipeline_status"
+                            widget="badge"
+                            optional="show"
+                            decoration-success="pipeline_status == 'success'"
+                            decoration-danger="pipeline_status == 'failed'"
+                            decoration-muted="pipeline_status == 'canceled'"
+                        />
                         <field name="date" />
+                        <field name="id_job" optional="hide" />
+                        <field name="commit_sha" optional="hide" />
+                        <field name="pipeline_source" optional="hide" />
+                        <field name="triggered_by" optional="hide" />
                         <button
                             name="action_open_job"
                             string="Open"

@@ -28,9 +28,16 @@ class TestCiJobRetry(ProjectGithubCase):
         )
 
     @staticmethod
-    def _run_stub(ref, conclusion, jobs=(), run_number=42):
+    def _run_stub(ref, conclusion, jobs=(), run_number=42, triggering_actor=True):
         run = MagicMock(name="github_workflow_run")
         run.run_number = run_number
+        run.run_attempt = 1
+        run.display_title = "GH-15 Fix the deploy"
+        run.head_sha = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+        run.event = "push"
+        run.triggering_actor = (
+            SimpleNamespace(login="github-dev") if triggering_actor else None
+        )
         run.head_branch = ref
         run.conclusion = conclusion
         run.status = "completed"
@@ -108,9 +115,14 @@ class TestCiJobRetry(ProjectGithubCase):
                     "name": "tests",
                     "workflow": "CI",
                     "status": "failure",
+                    "run_title": "GH-15 Fix the deploy",
+                    "commit_sha": "a1b2c3d",
+                    "triggered_by": "github-dev",
                     "run_number": 57,
+                    "run_attempt": 1,
                     "run_ref": "main",
                     "run_status": "failure",
+                    "run_event": "push",
                     "web_url": (
                         f"{GITHUB_COM_REPO_URL}/actions/runs/18400000000"
                         "/job/41800000011"
@@ -131,6 +143,20 @@ class TestCiJobRetry(ProjectGithubCase):
             [self._run_stub("main", "cancelled", jobs=[never_completed_job])]
         )
         self.assertEqual(wizard.line_ids.date, datetime(2026, 1, 2, 7, 0, 0))
+
+    def test_run_without_triggering_actor(self):
+        # GitHub may return no triggering actor (e.g. a deleted user)
+        wizard, _github_repo = self._open_wizard(
+            [
+                self._run_stub(
+                    "main",
+                    "failure",
+                    jobs=[self._job_stub(41800000015, "tests", "failure")],
+                    triggering_actor=False,
+                )
+            ]
+        )
+        self.assertFalse(wizard.line_ids.triggered_by)
 
     def test_reload_respects_run_count(self):
         wizard, _github_repo = self._open_wizard(

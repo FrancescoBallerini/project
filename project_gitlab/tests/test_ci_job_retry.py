@@ -28,6 +28,7 @@ class TestCiJobRetry(ProjectGitlabCase):
         pipeline.id = id_pipeline
         pipeline.ref = ref
         pipeline.status = status
+        pipeline.source = "push"
         pipeline.jobs.list.return_value = list(jobs)
         return pipeline
 
@@ -43,6 +44,10 @@ class TestCiJobRetry(ProjectGitlabCase):
             name=name,
             status=status,
             stage=extra.get("stage", "deploy"),
+            commit=extra.get(
+                "commit", {"title": "GL-15 Fix the deploy", "short_id": "a1b2c3d4"}
+            ),
+            user=extra.get("user", {"username": "gitlab-dev"}),
             finished_at=extra.get("finished_at", "2026-01-02T10:00:00.000+02:00"),
             created_at=extra.get("created_at", "2026-01-02T07:00:00.000Z"),
             web_url=f"{GITLAB_REPO_URL}/-/jobs/{id_job}",
@@ -95,9 +100,13 @@ class TestCiJobRetry(ProjectGitlabCase):
                     "name": "tests",
                     "stage": "deploy",
                     "status": "failed",
+                    "commit_title": "GL-15 Fix the deploy",
+                    "commit_sha": "a1b2c3d4",
+                    "triggered_by": "gitlab-dev",
                     "id_pipeline": "2980000002",
                     "pipeline_ref": "main",
                     "pipeline_status": "failed",
+                    "pipeline_source": "push",
                     "web_url": f"{GITLAB_REPO_URL}/-/jobs/17400000011",
                 }
             ],
@@ -114,6 +123,17 @@ class TestCiJobRetry(ProjectGitlabCase):
             [self._pipeline_stub("main", "canceled", jobs=[never_run_job])]
         )
         self.assertEqual(wizard.line_ids.date, datetime(2026, 1, 2, 7, 0, 0))
+
+    def test_job_without_commit_and_user(self):
+        # The nested commit and user payloads may be missing or null
+        job = self._job_stub(17400000014, "tests", "failed", commit=None, user=None)
+        wizard, _gitlab_project = self._open_wizard(
+            [self._pipeline_stub("main", "failed", jobs=[job])]
+        )
+        self.assertRecordValues(
+            wizard.line_ids,
+            [{"commit_title": False, "commit_sha": False, "triggered_by": False}],
+        )
 
     def test_reload_respects_pipeline_count(self):
         wizard, _gitlab_project = self._open_wizard(

@@ -126,6 +126,9 @@ class ProjectGitlabCiJobRetry(models.TransientModel):
         )
         for pipeline in pipelines:
             for job in pipeline.jobs.list(scope=FINISHED_JOB_SCOPES, get_all=True):
+                # Commit and user are nested dicts of the job payload
+                job_commit = getattr(job, "commit", None) or {}
+                job_user = getattr(job, "user", None) or {}
                 lines_vals.append(
                     {
                         "wizard_id": self.id,
@@ -133,9 +136,13 @@ class ProjectGitlabCiJobRetry(models.TransientModel):
                         "name": job.name,
                         "stage": job.stage,
                         "status": job.status,
+                        "commit_title": job_commit.get("title"),
+                        "commit_sha": job_commit.get("short_id"),
+                        "triggered_by": job_user.get("username"),
                         "id_pipeline": str(pipeline.id),
                         "pipeline_ref": pipeline.ref,
                         "pipeline_status": pipeline.status,
+                        "pipeline_source": pipeline.source,
                         "date": self._parse_job_date(job),
                         "web_url": job.web_url,
                     }
@@ -174,9 +181,13 @@ class ProjectGitlabCiJobRetryLine(models.TransientModel):
     name = fields.Char(string="Job", readonly=True)
     stage = fields.Char(readonly=True)
     status = fields.Char(readonly=True)
+    commit_title = fields.Char(string="Commit", readonly=True)
+    commit_sha = fields.Char(string="Commit SHA", readonly=True)
+    triggered_by = fields.Char(readonly=True)
     id_pipeline = fields.Char(string="Pipeline", readonly=True)
     pipeline_ref = fields.Char(string="Ref", readonly=True)
     pipeline_status = fields.Char(readonly=True)
+    pipeline_source = fields.Char(string="Trigger", readonly=True)
     date = fields.Datetime(string="Finished On", readonly=True)
     web_url = fields.Char(string="Job URL", readonly=True)
 

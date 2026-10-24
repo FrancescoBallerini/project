@@ -134,9 +134,16 @@ class ProjectGithubCiJobRetry(models.TransientModel):
                         "name": job.name,
                         "workflow": job.workflow_name,
                         "status": job.conclusion,
+                        "run_title": run.display_title,
+                        "commit_sha": run.head_sha[:7],
+                        "triggered_by": (
+                            run.triggering_actor and run.triggering_actor.login
+                        ),
                         "run_number": run.run_number,
+                        "run_attempt": run.run_attempt,
                         "run_ref": run.head_branch,
                         "run_status": run.conclusion or run.status,
+                        "run_event": run.event,
                         "date": self._parse_job_date(job),
                         "web_url": job.html_url,
                         "run_url": run.html_url,
@@ -189,9 +196,16 @@ class ProjectGithubCiJobRetryLine(models.TransientModel):
     name = fields.Char(string="Job", readonly=True)
     workflow = fields.Char(readonly=True)
     status = fields.Char(readonly=True)
+    # Push runs: first line of the head commit message; pull request
+    # runs: title of the pull request; manual runs: workflow name
+    run_title = fields.Char(readonly=True)
+    commit_sha = fields.Char(string="Commit SHA", readonly=True)
+    triggered_by = fields.Char(readonly=True)
     run_number = fields.Integer(string="Run", readonly=True)
+    run_attempt = fields.Integer(string="Attempt", readonly=True)
     run_ref = fields.Char(string="Ref", readonly=True)
     run_status = fields.Char(readonly=True)
+    run_event = fields.Char(string="Trigger", readonly=True)
     date = fields.Datetime(string="Finished On", readonly=True)
     web_url = fields.Char(string="Job URL", readonly=True)
     run_url = fields.Char(string="Run URL", readonly=True)
