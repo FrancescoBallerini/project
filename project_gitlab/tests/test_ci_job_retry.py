@@ -135,6 +135,15 @@ class TestCiJobRetry(ProjectGitlabCase):
             [{"commit_title": False, "commit_sha": False, "triggered_by": False}],
         )
 
+    def test_pipeline_without_source(self):
+        # The pipeline list reply may lack the source on older instances
+        pipeline = self._pipeline_stub(
+            "main", "failed", jobs=[self._job_stub(17400000015, "tests", "failed")]
+        )
+        del pipeline.source
+        wizard, _gitlab_project = self._open_wizard([pipeline])
+        self.assertRecordValues(wizard.line_ids, [{"pipeline_source": False}])
+
     def test_reload_respects_pipeline_count(self):
         wizard, _gitlab_project = self._open_wizard(
             [self._pipeline_stub("main", "failed", jobs=[])]

@@ -78,7 +78,8 @@ class ProjectProject(models.Model):
         odoo_url = self._get_webhook_url()
         try:
             gitlab_project = gl.projects.get(self._git_project_path(project_url))
-            for hook in gitlab_project.hooks.list():
+            # get_all: the first page alone may miss the stale hook
+            for hook in gitlab_project.hooks.list(get_all=True):
                 if hook.url == odoo_url:
                     hook.delete()
             gitlab_project.hooks.create(

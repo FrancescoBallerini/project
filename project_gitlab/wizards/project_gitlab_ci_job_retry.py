@@ -142,7 +142,10 @@ class ProjectGitlabCiJobRetry(models.TransientModel):
                         "id_pipeline": str(pipeline.id),
                         "pipeline_ref": pipeline.ref,
                         "pipeline_status": pipeline.status,
-                        "pipeline_source": pipeline.source,
+                        # The GitLab docs do not say since which version
+                        # the pipeline list returns the pipeline source:
+                        # read it with a fallback
+                        "pipeline_source": getattr(pipeline, "source", None),
                         "date": self._parse_job_date(job),
                         "web_url": job.web_url,
                     }

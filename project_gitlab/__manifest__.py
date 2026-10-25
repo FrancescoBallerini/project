@@ -25,7 +25,10 @@
     ],
     "external_dependencies": {
         "python": [
-            "python-gitlab",
+            # The CI job retry wizard lists jobs with the get_all
+            # argument (python-gitlab 3.7); the client also needs the
+            # retry_transient_errors argument (3.0)
+            "python-gitlab>=3.7.0",
         ],
     },
 }

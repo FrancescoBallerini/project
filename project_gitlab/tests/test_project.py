@@ -88,6 +88,10 @@ class TestProjectWebhookDeploy(ProjectGitlabCase):
         )
         with patcher:
             self.gitlab_project.create_project_webhook()
+        # Every page of hooks is scanned, not only the first one
+        client.projects.get.return_value.hooks.list.assert_called_once_with(
+            get_all=True
+        )
         stale_hook.delete.assert_called_once_with()
         foreign_hook.delete.assert_not_called()
         client.projects.get.return_value.hooks.create.assert_called_once()
