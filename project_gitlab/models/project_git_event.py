@@ -247,7 +247,12 @@ class ProjectGitEvent(models.Model):
             "url": event["object_attributes"]["url"],
             "source_branch": event["object_attributes"]["source_branch"],
             "target_branch": event["object_attributes"]["target_branch"],
-            "wip": event["object_attributes"]["work_in_progress"],
+            # work_in_progress is deprecated and replaced by draft: read
+            # draft, and keep reading work_in_progress as a fallback for
+            # older GitLab instances
+            "wip": event["object_attributes"].get(
+                "draft", event["object_attributes"].get("work_in_progress", False)
+            ),
             "state": event["object_attributes"]["state"],
             "last_commit": last_commit.get("id", ""),
             "user_id": user.id,

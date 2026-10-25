@@ -23,6 +23,7 @@
     "target_branch": "main",
     "state": "opened",
     "action": "open",
+    "draft": false,
     "work_in_progress": false,
     "url": "https://gitlab.example.com/acme/demo-repo/-/merge_requests/1",
     "last_commit": {

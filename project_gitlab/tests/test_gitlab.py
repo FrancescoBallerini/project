@@ -681,8 +681,24 @@ class TestGitlabMergeRequest(ProjectGitlabCase):
         self.assertNotIn("Approved", self.gl_task_100.tag_ids.mapped("name"))
 
     def test_mr_wip_flag_sets_tag(self):
+        # Without the deprecated work_in_progress field: draft alone
+        # carries the flag
+        payload = self._mr_payload(title="GL-100 add new file")
+        payload["object_attributes"]["draft"] = True
+        del payload["object_attributes"]["work_in_progress"]
+        patcher, _merge_request = self._mock_gitlab_client()
+        with patcher:
+            self._dispatch(payload, "gitlab")
+
+        pull_request = self._get_pull_request(payload["object_attributes"]["url"])
+        self.assertTrue(pull_request.wip)
+        self.assertIn("WIP", self.gl_task_100.tag_ids.mapped("name"))
+
+    def test_mr_legacy_wip_flag_sets_tag(self):
+        # Older instances carry the work_in_progress field only
         payload = self._mr_payload(title="GL-100 add new file")
         payload["object_attributes"]["work_in_progress"] = True
+        del payload["object_attributes"]["draft"]
         patcher, _merge_request = self._mock_gitlab_client()
         with patcher:
             self._dispatch(payload, "gitlab")
