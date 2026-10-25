@@ -9,8 +9,22 @@ from odoo import http
 from odoo.http import request
 
 from ..models.project_git_auth import BANNED_TOKENS
+from ..models.project_git_utils import WEBHOOK_ROUTE
 
 _logger = logging.getLogger(__name__)
+
+
+def webhook_response(outcome, http_status=200, **values):
+    """JSON response to a webhook delivery. The platforms only read the
+    HTTP status: 2xx records the delivery as successful (accepted or
+    deliberately skipped event), any other status as failed. The body
+    is shown in the delivery log of the platform: the outcome
+    ("queued", "skipped", "rejected"; "error" comes from ir.http
+    _handle_error), plus the reason or the uuid of the queue job
+    handling the event."""
+    return request.make_json_response(
+        data={"status": outcome, **values}, status=http_status
+    )
 
 
 def token_authorization(function):
@@ -20,9 +34,13 @@ def token_authorization(function):
     (_detect_event_source), the webhook secret of that platform is read
     by the source-specific _get_webhook_secret_<source> hook, then the
     request is authorized against it by the source-specific
-    _verify_webhook_token_<source> method. Requests from unrecognized
-    sources, without a configured secret or with an invalid token get
-    an unsuccessful response.
+    _verify_webhook_token_<source> method.
+
+    Rejected requests get an HTTP error status, so the platform records
+    the delivery as failed (and it can be redelivered once the
+    configuration is fixed): 400 for unrecognized sources, 503 when the
+    secret of the platform is not configured on Odoo, 401 for an
+    invalid token or signature.
     """
 
     @functools.wraps(function)
@@ -32,7 +50,11 @@ def token_authorization(function):
             _logger.warning(
                 "Unrecognized webhook source (no platform header claims the request)"
             )
-            return False
+            return webhook_response(
+                outcome="rejected",
+                http_status=400,
+                reason="unrecognized webhook source",
+            )
         secret = False
         if hasattr(self, f"_get_webhook_secret_{source}"):
             secret = getattr(self, f"_get_webhook_secret_{source}")()
@@ -42,13 +64,19 @@ def token_authorization(function):
                 "(or still set to an insecure default)",
                 source,
             )
-            return False
+            return webhook_response(
+                outcome="rejected",
+                http_status=503,
+                reason="webhook secret not configured",
+            )
         authorization = False
         if hasattr(self, f"_verify_webhook_token_{source}"):
             authorization = getattr(self, f"_verify_webhook_token_{source}")(secret)
         if not authorization:
             _logger.warning("Token is not the expected for source %r", source)
-            return False
+            return webhook_response(
+                outcome="rejected", http_status=401, reason="invalid webhook token"
+            )
         kw["source"] = source
         return function(self, *args, **kw)
 
@@ -56,14 +84,23 @@ def token_authorization(function):
 
 
 class ProjectGitWebhook(http.Controller):
-    @http.route("/project_git/webhook/", type="json", auth="public", csrf=False)
+    @http.route(
+        route=WEBHOOK_ROUTE, type="http", auth="public", methods=["POST"], csrf=False
+    )
     @token_authorization
     def _process_webhook(self, **kw):
         """Receive the request from the git platform and invoke the
         per-source handler named after the normalized
         'project_git_event_type' key and the event source:
         _process_<project_git_event_type>_<source>. Each platform
-        bridge explicitly binds every event it handles."""
+        bridge explicitly binds every event it handles.
+
+        The route is a plain HTTP one (the platforms send a raw JSON
+        body, not a JSON-RPC call): the platforms only read the
+        response status. An exception raised while handling the
+        request gets a 500 status from the Odoo HTTP layer, without
+        traceback (ir.http _handle_error), so the delivery is recorded
+        as failed too."""
         event = request.get_json_data()
         event["source"] = kw.get("source", "")
         event = self._parse_git_request_data(
@@ -72,16 +109,19 @@ class ProjectGitWebhook(http.Controller):
         git_event = request.env["project.git.event"]
         event_type = event.get("project_git_event_type")
         if not event_type:
-            return True
+            return webhook_response(outcome="skipped", reason="no event type")
         method_name = f"_process_{event_type}_{event['source']}"
         if not hasattr(git_event, method_name):
             # Event kinds the source bridge binds no handler for
             # (e.g. note events) are skipped silently.
-            return True
+            return webhook_response(outcome="skipped", reason="no handler")
         channel = request.env["project.git.utils"]._get_project_git_queue_job_channel()
-        return getattr(
-            git_event.with_delay(channel=channel.complete_name), method_name
-        )(event)
+        job = getattr(git_event.with_delay(channel=channel.complete_name), method_name)(
+            event=event
+        )
+        # The job uuid links the delivery log of the platform to the
+        # queue job in Odoo
+        return webhook_response(outcome="queued", job_uuid=job.uuid)
 
     def _detect_event_source(self, headers):
         """Recognize the source platform of a request from its headers.

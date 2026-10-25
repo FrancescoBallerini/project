@@ -49,12 +49,16 @@ class TestGitlabWebhookController(ProjectGitControllerCase):
 
     def test_gitlab_wrong_token_is_rejected(self):
         jobs_before = self._job_count("_process_commit_push_gitlab")
-        result = self._post_webhook(
-            self._load_payload("gitlab_push.json"),
+        response = self._post_webhook(
+            payload=self._load_payload("gitlab_push.json"),
             headers=self._gitlab_headers(token="not-the-right-token"),
+            expected_status=401,
         )
-        self.assertIs(result, False)
         self.assertEqual(self._job_count("_process_commit_push_gitlab"), jobs_before)
+        self.assertEqual(
+            response.json(),
+            {"status": "rejected", "reason": "invalid webhook token"},
+        )
 
     def test_gitlab_valid_token_enqueues_job(self):
         jobs_before = self._job_count("_process_commit_push_gitlab")
@@ -83,11 +87,11 @@ class TestGitlabWebhookController(ProjectGitControllerCase):
         # The sending instance selects the secret: an instance with no
         # configured secret is rejected even with a matching token
         jobs_before = self._job_count("_process_commit_push_gitlab")
-        result = self._post_webhook(
-            self._load_payload("gitlab_push.json"),
+        self._post_webhook(
+            payload=self._load_payload("gitlab_push.json"),
             headers=self._gitlab_headers(instance="https://rogue.example.com"),
+            expected_status=503,
         )
-        self.assertIs(result, False)
         self.assertEqual(self._job_count("_process_commit_push_gitlab"), jobs_before)
 
     def test_missing_secret_param_rejects_requests(self):
@@ -95,10 +99,11 @@ class TestGitlabWebhookController(ProjectGitControllerCase):
             f"project_gitlab.webhook_secret.{GITLAB_INSTANCE_ROOT}", False
         )
         jobs_before = self._job_count("_process_commit_push_gitlab")
-        result = self._post_webhook(
-            self._load_payload("gitlab_push.json"), headers=self._gitlab_headers()
+        self._post_webhook(
+            payload=self._load_payload(name="gitlab_push.json"),
+            headers=self._gitlab_headers(),
+            expected_status=503,
         )
-        self.assertIs(result, False)
         self.assertEqual(self._job_count("_process_commit_push_gitlab"), jobs_before)
 
     def test_insecure_default_token_rejects_requests(self):
@@ -108,11 +113,11 @@ class TestGitlabWebhookController(ProjectGitControllerCase):
             f"project_gitlab.webhook_secret.{GITLAB_INSTANCE_ROOT}", "token"
         )
         jobs_before = self._job_count("_process_commit_push_gitlab")
-        result = self._post_webhook(
-            self._load_payload("gitlab_push.json"),
+        self._post_webhook(
+            payload=self._load_payload("gitlab_push.json"),
             headers=self._gitlab_headers(token="token"),
+            expected_status=503,
         )
-        self.assertIs(result, False)
         self.assertEqual(self._job_count("_process_commit_push_gitlab"), jobs_before)
 
     # ---- signing token verification (Standard Webhooks) ----
@@ -161,11 +166,11 @@ class TestGitlabWebhookController(ProjectGitControllerCase):
         wrong_secret = SIGNING_SECRET_PREFIX + b64encode(b"x" * 32).decode()
         payload = self._load_payload("gitlab_push.json")
         jobs_before = self._job_count("_process_commit_push_gitlab")
-        result = self._post_webhook(
-            payload,
+        self._post_webhook(
+            payload=payload,
             headers=self._gitlab_signed_headers(payload, signing_secret=wrong_secret),
+            expected_status=401,
         )
-        self.assertIs(result, False)
         self.assertEqual(self._job_count("_process_commit_push_gitlab"), jobs_before)
 
     def test_gitlab_stale_timestamp_is_rejected(self):
@@ -175,10 +180,11 @@ class TestGitlabWebhookController(ProjectGitControllerCase):
         payload = self._load_payload("gitlab_push.json")
         stale = str(int(time.time()) - 3600)
         jobs_before = self._job_count("_process_commit_push_gitlab")
-        result = self._post_webhook(
-            payload, headers=self._gitlab_signed_headers(payload, timestamp=stale)
+        self._post_webhook(
+            payload=payload,
+            headers=self._gitlab_signed_headers(payload=payload, timestamp=stale),
+            expected_status=401,
         )
-        self.assertIs(result, False)
         self.assertEqual(self._job_count("_process_commit_push_gitlab"), jobs_before)
 
     def test_gitlab_signing_secret_rejects_plain_token_header(self):
@@ -188,10 +194,11 @@ class TestGitlabWebhookController(ProjectGitControllerCase):
         self._use_signing_secret()
         payload = self._load_payload("gitlab_push.json")
         jobs_before = self._job_count("_process_commit_push_gitlab")
-        result = self._post_webhook(
-            payload, headers=self._gitlab_headers(token=TEST_SIGNING_SECRET)
+        self._post_webhook(
+            payload=payload,
+            headers=self._gitlab_headers(token=TEST_SIGNING_SECRET),
+            expected_status=401,
         )
-        self.assertIs(result, False)
         self.assertEqual(self._job_count("_process_commit_push_gitlab"), jobs_before)
 
     def test_gitlab_rotated_signature_list_is_accepted(self):
@@ -214,8 +221,7 @@ class TestGitlabWebhookController(ProjectGitControllerCase):
         jobs_total_before = self._job_count()
         headers = self._gitlab_headers()
         headers["X-Gitlab-Event"] = "Note Hook"
-        result = self._post_webhook(
-            {"object_kind": "note", "project": {}}, headers=headers
+        self._post_webhook(
+            payload={"object_kind": "note", "project": {}}, headers=headers
         )
-        self.assertIs(result, True)
         self.assertEqual(self._job_count(), jobs_total_before)
