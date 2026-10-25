@@ -133,20 +133,29 @@ class ProjectGitControllerCase(PayloadCaseMixin, HttpCase):
         # controller suite configures its own in setUp
         self.config = self.env["ir.config_parameter"].sudo()
 
-    def _post_webhook(self, payload, headers=None):
-        """POST the payload to the webhook route and return the JSON-RPC
-        result (the return value of the controller)."""
+    def _post_webhook(self, payload, headers=None, expected_status=200):
+        """POST the payload to the webhook route and assert the HTTP
+        status of the response: the platforms only read the status to
+        tell a successful delivery (2xx) from a failed one."""
+        return self._post_raw_webhook(
+            data=json.dumps(payload), headers=headers, expected_status=expected_status
+        )
+
+    def _post_raw_webhook(self, data, headers=None, expected_status=200):
+        """POST a raw body to the webhook route, with the JSON content
+        type unless the headers override it, and assert the HTTP status
+        of the response. The request goes through the opener because
+        url_open turns a request with an empty body into a GET."""
         request_headers = {"Content-Type": "application/json"}
         request_headers.update(headers or {})
-        response = self.url_open(
-            WEBHOOK_URL, data=json.dumps(payload), headers=request_headers
+        response = self.opener.post(
+            url=self.base_url() + WEBHOOK_URL,
+            data=data,
+            headers=request_headers,
+            timeout=12,
         )
-        response.raise_for_status()
-        response_data = response.json()
-        self.assertNotIn(
-            "error", response_data, response_data.get("error", {}).get("data")
-        )
-        return response_data.get("result")
+        self.assertEqual(response.status_code, expected_status, response.text)
+        return response
 
     def _job_count(self, method_name=None):
         """Count the queue jobs enqueued for a handler (all jobs when no

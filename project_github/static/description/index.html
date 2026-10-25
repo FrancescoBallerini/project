@@ -448,9 +448,10 @@ consider a token dedicated to this integration.</p>
 <li><p class="first"><strong>Deploy the webhook</strong> with the <strong>Create Webhooks</strong> button on the
 project form (<strong>Project &gt; Configuration &gt; Projects</strong>, open the
 project; to configure it by hand instead, use the repository page on
-GitHub, <strong>Settings &gt; Webhooks</strong>). The webhook is subscribed to push
-and pull request events and uses <tt class="docutils literal">project_github.webhook_secret</tt> as
-HMAC secret.</p>
+GitHub, <strong>Settings &gt; Webhooks</strong>, and set <strong>Content type</strong> to
+<tt class="docutils literal">application/json</tt>: deliveries sent as form data are rejected). The
+webhook is subscribed to push and pull request events and uses
+<tt class="docutils literal">project_github.webhook_secret</tt> as HMAC secret.</p>
 </li>
 <li><p class="first"><strong>Optionally, map GitHub users to Odoo users</strong>: go to <strong>Settings &gt;
 Users &amp; Companies &gt; Users</strong>, open the user and fill the <strong>Github

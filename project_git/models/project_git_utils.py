@@ -7,6 +7,8 @@ import requests
 
 from odoo import api, models
 
+WEBHOOK_ROUTE = "/project_git/webhook/"
+
 TASK_NAME_MATCH_REGEX = r"\b[A-Z][A-Z]+-\d+\b"
 TASK_ID_REFERENCE_REGEX = r"\b(?:task|t)id#(?P<id>\d+)\b"
 

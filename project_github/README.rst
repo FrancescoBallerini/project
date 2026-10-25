@@ -105,9 +105,10 @@ Connect your GitHub repositories, step by step:
 4. **Deploy the webhook** with the **Create Webhooks** button on the
    project form (**Project > Configuration > Projects**, open the
    project; to configure it by hand instead, use the repository page on
-   GitHub, **Settings > Webhooks**). The webhook is subscribed to push
-   and pull request events and uses ``project_github.webhook_secret`` as
-   HMAC secret.
+   GitHub, **Settings > Webhooks**, and set **Content type** to
+   ``application/json``: deliveries sent as form data are rejected). The
+   webhook is subscribed to push and pull request events and uses
+   ``project_github.webhook_secret`` as HMAC secret.
 
 5. **Optionally, map GitHub users to Odoo users**: go to **Settings >
    Users & Companies > Users**, open the user and fill the **Github

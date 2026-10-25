@@ -7,6 +7,8 @@ from urllib.parse import urlparse
 
 from odoo import api, fields, models
 
+from .project_git_utils import WEBHOOK_ROUTE
+
 _logger = logging.getLogger(__name__)
 
 
@@ -49,9 +51,8 @@ class ProjectProject(models.Model):
         return ""
 
     def _get_webhook_url(self):
-        return "%s/project_git/webhook/" % self.env[
-            "ir.config_parameter"
-        ].sudo().get_param("web.base.url").strip("/")
+        base_url = self.env["ir.config_parameter"].sudo().get_param(key="web.base.url")
+        return base_url.strip("/") + WEBHOOK_ROUTE
 
     def _create_project_webhook(self, project_url):
         platform = self._get_url_platform(project_url)
