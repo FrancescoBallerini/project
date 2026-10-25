@@ -5,10 +5,17 @@ import json
 import os
 from hashlib import sha256
 from hmac import HMAC
+from unittest.mock import patch
+
+from psycopg2 import OperationalError
+from werkzeug.exceptions import HTTPException
 
 from odoo.tests import tagged
+from odoo.tools import mute_logger
 
 from odoo.addons.project_git.tests.common import TEST_TOKEN, ProjectGitControllerCase
+
+from ..controllers.main import ProjectGithubWebhook
 
 
 @tagged("post_install", "-at_install")
@@ -37,8 +44,8 @@ class TestGithubWebhookController(ProjectGitControllerCase):
     def test_github_valid_signature_enqueues_job(self):
         payload = self._load_payload("github_push.json")
         jobs_before = self._job_count("_process_commit_push_github")
-        self._post_webhook(
-            payload,
+        response = self._post_webhook(
+            payload=payload,
             headers={
                 "X-GitHub-Event": "push",
                 "X-Hub-Signature-256": self._github_signature(payload),
@@ -48,31 +55,36 @@ class TestGithubWebhookController(ProjectGitControllerCase):
             self._job_count("_process_commit_push_github"), jobs_before + 1
         )
         self.assertEqual(self._last_job().channel, "root.project_git")
+        # The body links the delivery to the queue job handling it
+        self.assertEqual(
+            self._response_data(response=response),
+            {"status": "queued", "job_uuid": self._last_job().uuid},
+        )
 
     def test_missing_secret_param_rejects_requests(self):
         self.config.set_param("project_github.webhook_secret", False)
         payload = self._load_payload("github_push.json")
         jobs_before = self._job_count("_process_commit_push_github")
-        result = self._post_webhook(
-            payload,
+        self._post_webhook(
+            payload=payload,
             headers={
                 "X-GitHub-Event": "push",
                 "X-Hub-Signature-256": self._github_signature(payload),
             },
+            expected_status=503,
         )
-        self.assertIs(result, False)
         self.assertEqual(self._job_count("_process_commit_push_github"), jobs_before)
 
     def test_github_invalid_signature_is_rejected(self):
         jobs_before = self._job_count("_process_commit_push_github")
-        result = self._post_webhook(
-            self._load_payload("github_push.json"),
+        self._post_webhook(
+            payload=self._load_payload("github_push.json"),
             headers={
                 "X-GitHub-Event": "push",
                 "X-Hub-Signature-256": f"sha256={'0' * 64}",
             },
+            expected_status=401,
         )
-        self.assertIs(result, False)
         self.assertEqual(self._job_count("_process_commit_push_github"), jobs_before)
 
     def test_github_event_without_handler_is_skipped(self):
@@ -81,12 +93,91 @@ class TestGithubWebhookController(ProjectGitControllerCase):
         # on hook creation) are acknowledged without enqueueing anything
         payload = {"zen": "Design for failure.", "hook_id": 1, "repository": {}}
         jobs_total_before = self._job_count()
-        result = self._post_webhook(
-            payload,
+        response = self._post_webhook(
+            payload=payload,
             headers={
                 "X-GitHub-Event": "ping",
                 "X-Hub-Signature-256": self._github_signature(payload),
             },
         )
-        self.assertIs(result, True)
         self.assertEqual(self._job_count(), jobs_total_before)
+        self.assertEqual(
+            self._response_data(response=response),
+            {"status": "skipped", "reason": "no handler"},
+        )
+
+    def test_controller_exception_fails_the_delivery(self):
+        # An authorized request whose handling raises must not look
+        # successful to the platform: the 500 status records the
+        # delivery as failed, so it can be redelivered once fixed
+        payload = self._load_payload(name="github_push.json")
+        jobs_total_before = self._job_count()
+        with patch.object(
+            target=ProjectGithubWebhook,
+            attribute="_parse_git_request_data_github",
+            side_effect=ValueError("Unexpected payload"),
+        ), mute_logger("odoo.http"):
+            response = self._post_webhook(
+                payload=payload,
+                headers={
+                    "X-GitHub-Event": "push",
+                    "X-Hub-Signature-256": self._github_signature(payload=payload),
+                },
+                expected_status=500,
+            )
+        self.assertEqual(self._job_count(), jobs_total_before)
+        self.assertEqual(
+            self._response_data(response=response),
+            {"status": "error", "reason": "Internal Server Error"},
+        )
+
+    def test_unknown_http_status_fails_the_delivery(self):
+        # An HTTP status without a standard reason phrase must fail the
+        # delivery too: the error handler itself must not raise, or Odoo
+        # would answer 200 with the JSON-RPC error handling
+        class UnknownStatus(HTTPException):
+            code = 599
+
+        payload = self._load_payload(name="github_push.json")
+        with patch.object(
+            target=ProjectGithubWebhook,
+            attribute="_parse_git_request_data_github",
+            side_effect=UnknownStatus(),
+        ):
+            response = self._post_webhook(
+                payload=payload,
+                headers={
+                    "X-GitHub-Event": "push",
+                    "X-Hub-Signature-256": self._github_signature(payload=payload),
+                },
+                expected_status=599,
+            )
+        self.assertEqual(
+            self._response_data(response=response),
+            {"status": "error", "reason": "Unknown Error"},
+        )
+
+    def test_database_error_fails_the_delivery(self):
+        # A database error the Odoo HTTP layer does not retry (or retries
+        # in vain) reaches it outside the controller: it must fail the
+        # delivery as well, not look successful
+        payload = self._load_payload(name="github_push.json")
+        jobs_total_before = self._job_count()
+        with patch.object(
+            target=ProjectGithubWebhook,
+            attribute="_parse_git_request_data_github",
+            side_effect=OperationalError("Connection lost"),
+        ), mute_logger("odoo.http", "odoo.service.model"):
+            response = self._post_webhook(
+                payload=payload,
+                headers={
+                    "X-GitHub-Event": "push",
+                    "X-Hub-Signature-256": self._github_signature(payload=payload),
+                },
+                expected_status=500,
+            )
+        self.assertEqual(self._job_count(), jobs_total_before)
+        self.assertEqual(
+            self._response_data(response=response),
+            {"status": "error", "reason": "Internal Server Error"},
+        )

@@ -51,7 +51,11 @@ Technical > Parameters > System Parameters**:
 - the **webhook secret** of each platform (e.g.
   `project_github.webhook_secret`): the secret token set on the
   webhooks. Incoming requests are rejected when the parameter of their
-  platform is missing or still set to the demo default.
+  platform is missing or still set to the demo default. A rejected
+  request gets an HTTP error status (503 when the parameter is
+  missing, 401 when the token or signature does not match), so the
+  platform shows the delivery as failed and it can be redelivered
+  once the configuration is fixed.
 - the **API token** used by Odoo to call the platform (e.g.
   `project_github.token`).
 
