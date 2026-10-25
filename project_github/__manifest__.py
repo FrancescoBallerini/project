@@ -25,8 +25,10 @@
     ],
     "external_dependencies": {
         "python": [
-            # The Auth.Token authentication object needs PyGithub 1.59
-            "PyGithub>=1.59",
+            # The CI job retry needs the public requester (PyGithub 2.5)
+            # to call the job rerun endpoint; 2.6 adds the triggering
+            # actor shown in the job list
+            "PyGithub>=2.6.0",
         ],
     },
 }
